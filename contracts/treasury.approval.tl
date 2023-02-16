@@ -67,13 +67,7 @@ block main:
 
         # cover the MBR increase in the app account due to the boxes by
         # taking the necessary 0.057 ALGO from the escrow account
-        inner_txn:
-            TypeEnum: Pay
-            Sender: escrow_address
-            Receiver: Global.CurrentApplicationAddress
-            Amount: 57000
-            Fee: 0
-        end
+        transfer(ALGO_ID, 57000, escrow_address, Global.CurrentApplicationAddress, "")
 
         # asserts that the box does not exist yet
         bytes key_referrer_to_escrow = concat(MAP_ID_REFERRER_ESCROW, referrer_address)
@@ -192,14 +186,7 @@ block main:
             int is_opted_in
             is_opted_in, _ = asset_holding_get(AssetBalance, escrow_idx, Txn.Assets[i])
             if !is_opted_in && (Txn.Assets[i] != ALGO_ID):
-                inner_txn:
-                    TypeEnum: Axfer
-                    Sender: escrow_address
-                    AssetReceiver: escrow_address
-                    XferAsset: Txn.Assets[i]
-                    Amount: 0
-                    Fee: 0
-                end
+                transfer(Txn.Assets[i], 0, escrow_address, escrow_address, "")
             else:
                 skipped_assets = skipped_assets + 1
             end
@@ -207,13 +194,8 @@ block main:
 
         # send back the MBR increase for assets that were not opted in
         if skipped_assets > 0:
-            inner_txn:
-                TypeEnum: Pay
-                Sender: escrow_address
-                Receiver: Txn.Sender
-                Amount: 100_000 * skipped_assets
-                Fee: 0
-            end
+            int amount = 100_000 * skipped_assets
+            transfer(ALGO_ID, amount, escrow_address, Txn.Sender, "")
         end
 
         exit(1)
