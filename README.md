@@ -23,9 +23,10 @@ referrer address to its escrow address and vice versa.
 
 ### Map: Referrer -> Escrow
 
-Key:   `(0x00, referrer_address)`
-Value: `escrow_address`
-Length: 1 + 32 + 32 = 65 bytes
+Schema:
+- Key:   `(0x00, referrer_address)`
+- Value: `escrow_address`
+- Length: 1 + 32 + 32 = 65 bytes
 
 Cost per box entry:
 - 0.0025 ALGO for box creation
@@ -35,9 +36,10 @@ Cost per box entry:
 
 ### Map: Escrow -> Referrer
 
-Key:   `(0x01, escrow_address)`
-Value: `referrer_address`
-Length: 1 + 32 + 32 = 65 bytes
+Schema:
+- Key:   `(0x01, escrow_address)`
+- Value: `referrer_address`
+- Length: 1 + 32 + 32 = 65 bytes
 
 Cost per box entry:
 - 0.0025 ALGO for box creation
