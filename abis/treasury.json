@@ -2,7 +2,7 @@
   "name": "Deflex Referrer Treasury App",
   "methods": [
     {
-      "name": "Referrer_register_escrow",
+      "name": "register_escrow",
       "args": [
         {
           "type": "address",
@@ -16,36 +16,26 @@
       "desc": "Register an escrow address that collects fees for a referrer"
     },
     {
-      "name": "Referrer_claim",
+      "name": "claim",
       "args": [
+        {
+          "type": "account",
+          "name": "referrer",
+          "desc": "The referrer account"
+        },
         {
           "type": "account",
           "name": "escrow",
           "desc": "The referrer's escrow account"
-        },
-        {
-          "type": "account",
-          "name": "beneficiary",
-          "desc": "The beneficiary that receives the claimed asset"
-        },
-        {
-          "type": "asset",
-          "name": "asset",
-          "desc": "The asset which is claimed (or 0 if ALGO)"
-        },
-        {
-          "type": "uint64",
-          "name": "amount",
-          "desc": "The amount of the asset that is claimed (or 0 to claim it all)"
         }
       ],
       "returns": {
-        "type": "uint64"
+        "type": "void"
       },
-      "desc": "Claim ones commissions"
+      "desc": "Claim the commissions for all assets in the foreign assets array"
     },
     {
-      "name": "User_opt_into_assets",
+      "name": "opt_escrow_into_assets",
       "args": [
         {
           "type": "pay",

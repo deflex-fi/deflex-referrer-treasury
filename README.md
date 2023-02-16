@@ -12,8 +12,8 @@ referrer. For every referrer, an escrow account is created that's rekeyed to
 this app. If an asset is swapped that this escrow hasn't received before, the
 escrow is automatically opted into it.
 
-The referrer can claim the pooled commissions at any time.
-
+The pooled commissions can be claimed and sent to the referrer any time as long
+as the referrer has opted into the necessary assets.
 
 
 ## State
@@ -47,46 +47,124 @@ Cost per box entry:
 
 ## Methods
 
-### Registering an escrow account: `Referrer_register_escrow`
+### Registering an escrow account: `register_escrow`
 
 Registers an escrow account that collects commissions for a referrer. A
 referrer can have at most one escrow account.
 
 Parameters:
-1. `referrer_address`: the address of the referrer account
-
-Notes:
-- This function must be called from the escrow account
-- The escrow account rekeys itself to the app account
-- The escrow account must contain at least 0.157 ALGO, 0.057 of which are sent
-  to the app account to cover for the MBR increase due to the boxes
-
-Required network fees: `2 * minfee`
-- `1 * minfee` microALGO for the call itself
-- `1 * minfee` to send 0.057 ALGO to the app account
+1. `referrer_address`: the address of the referrer account that is escrow is
+   linked to.
 
 Box references:
 - `(0x00, referrer_address)`
 - `(0x01, escrow_address)`
 
-
-### Claiming commissions: `Referrer_claim`
-
-This claims a referrer's commissions from her escrow account and transfers them
-to a beneficiary account.
-
-Parameters:
-1. `escrow`: the escrow account that holds the commissions
-2. `beneficiary`: the beneficiary account that receives the commissions
-3. `beneficiary`: the asset for which the commissions are claimed (0 if ALGO)
-4. `amount`: the amount that is claimed (0 to claim all)
-
 Required network fees: `2 * minfee`
 - `1 * minfee` microALGO for the call itself
-- `1 * minfee` to send the commission to the beneficiary
+- `1 * minfee` to send 0.057 ALGO to the app account
 
 Notes:
-- This function must be called by the referrer
+- This function must be called from the escrow account
+- The escrow account must rekey itself to the app account
+- The escrow account must contain at least 0.157 ALGO, 0.057 of which are sent
+  to the app account to cover for the MBR increase due to the boxes
+
+
+### Claiming commissions: `claim`
+
+This claims a referrer's commissions from her escrow account and transfers them
+to a referrer account.
+
+The assets for which the commissions are claimed need to be specified in the
+transaction's foreign assets array. To claim ALGO, specify `0` in the foreign
+assets array.
+
+Parameters:
+1. `referrer`: the referrer's account that receives the commissions
+2. `escrow`: the referrer's escrow account that holds the commissions
+
+Box references:
+- `(0x00, referrer_address)`
+
+Required network fees: `minfee * (1 + len(foreign_assets))`
+- `1 * minfee` microALGO for the call itself
+- `len(foreign_assets) * minfee` to send the commission to the referrer
+
+Notes:
+- This function can be invoked by anyone, but only allows to send funds from a
+  escrow to its linked referrer.
+- We thought about allowing only the referrer to claim its fees, but if the
+  referrer is, e.g., a smart-contract governed by a DAO it may not be able to
+  issue the necessary transactions.
+
+
+### Opting an escrow into assets: `opt_escrow_into_assets`
+
+This opts an escrow account into the assets that are specified in the
+transaction's foreign assets array
+
+The transaction must be preceded by a payment transaction that covers the
+minimum balance increase for the assets that are opted in (100'000 microALGO
+per asset). For instance, if the user wants to opt into five assets, there must
+be a payment transaction that sends 500'000 microALGO to the app account.
+
+If the user provides assets that the app has already opted into previously,
+then the user is immediately sent back the locked ALGO for that. For instance,
+assume the escrow is opted into assets A1 and A2. Now the user calls
+`opt_escrow_into_assets(e, [A2,A3,A4,A1])` and provides a payment of 400'000
+microALGO. Then the app sends back 200'000 microALGO since assets A1 and A2 are
+already opted in.
+
+Parameters:
+1. `escrow`: the escrow account that is to be opted into the assets
+
+Required network fees: `minfee * (1 + len(foreign_assets))`
+- `1 * minfee` microALGO for the call itself
+- `len(foreign_assets) * minfee` to send the commission to the referrer
+
+
+### Getting a referrer's escrow address: `get_escrow_by_referrer`
+
+Return a referrer's registered escrow address (and the zero-address if none
+exists).
+
+Parameters:
+1. `referrer`: the referrer's address
+
+Box references:
+- `(0x00, referrer_address)`
+
+Required network fees: `1 * minfee`
+
+
+### Getting an escrow's linked referrer address: `get_referrer_by_escrow`
+
+Return the referrer address that's linked to the provided escrow (and the
+zero-address if none exists).
+
+Parameters:
+1. `escrow`: the escrow's address
+
+Box references:
+- `(0x01, escrow_address)`
+
+Required network fees: `1 * minfee`
+
 
 
 ## Transaction Groups
+
+### Registering an escrow
+
+1. Payment _(to increase the minimum balance of the limit-order app)_
+   1. Sender: Any Account
+   2. Receiver: Escrow account
+   3. Amount: `157_000` (MBR for account and box storage)
+2. Application _(to initialize the app)_
+   1. ID: Referrer Treasury App
+   2. Method: `register_escrow`
+   3. Sender: Escrow account
+   4. Args: [Referrer address]
+   5. On Complete: NoOp
+   6. Rekey to: Referrer Treasury App

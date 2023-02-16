@@ -167,7 +167,7 @@ class AppClient:
         composer.add_method_call(
             app_id=app_id,
             sender=escrow.pk,
-            method=self.contract.get_method_by_name('Referrer_register_escrow'),
+            method=self.contract.get_method_by_name('register_escrow'),
             sp=params,
             method_args=[
                 referrer_address,
@@ -203,7 +203,7 @@ class AppClient:
         composer.add_method_call(
             app_id=app_id,
             sender=user.pk,
-            method=self.contract.get_method_by_name('User_opt_into_assets'),
+            method=self.contract.get_method_by_name('opt_escrow_into_assets'),
             sp=params,
             method_args=[
                 payment_txn,
@@ -219,32 +219,28 @@ class AppClient:
     def prepare_claim(self,
             user: KeyPair,
             app_id: int,
+            referrer_address: str,
             escrow_address: str,
-            asset_id: int,
-            amount: int,
-            beneficiary_address: str = None,
+            asset_ids: List[int],
             composer: Optional[AtomicTransactionComposer] = None,
             params: Optional[SuggestedParams] = None) -> AtomicTransactionComposer:
-        if beneficiary_address == None:
-            beneficiary_address = user.pk
         composer, params = self._get_defaults(composer, params)
         composer.add_method_call(
             app_id=app_id,
             sender=user.pk,
-            method=self.contract.get_method_by_name('Referrer_claim'),
+            method=self.contract.get_method_by_name('claim'),
             sp=params,
             method_args=[
+                referrer_address,
                 escrow_address,
-                beneficiary_address,
-                asset_id,
-                amount,
             ],
             boxes=[
-                (app_id, bytes([0x00]) + encoding.decode_address(user.pk)),
+                (app_id, bytes([0x00]) + encoding.decode_address(referrer_address)),
             ],
+            foreign_assets=asset_ids,
             signer=AccountTransactionSigner(user.sk),
         )
-        composer.txn_list[-1].txn.fee = 2000
+        composer.txn_list[-1].txn.fee = 1000 * (1 + len(asset_ids))
         return composer
 
 

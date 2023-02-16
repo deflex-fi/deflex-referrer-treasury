@@ -44,15 +44,15 @@ end
 
 block main:
     switch Txn.ApplicationArgs[0]:
-        method("Referrer_register_escrow(address)void"): Referrer_registerEscrow
-        method("Referrer_claim(account,account,asset,uint64)uint64"): Referrer_claim
-        method("User_opt_into_assets(pay,account)void"): User_opt_into_assets
+        method("register_escrow(address)void"): register_escrow
+        method("claim(account,account)void"): claim
+        method("opt_escrow_into_assets(pay,account)void"): opt_escrow_into_assets
         method("get_escrow_by_referrer(address)address"): get_escrow_by_referrer
         method("get_referrer_by_escrow(address)address"): get_referrer_by_escrow
     end
 
 
-    block Referrer_registerEscrow:
+    block register_escrow:
         assert(Txn.CloseRemainderTo == Global.ZeroAddress)
         assert(Txn.AssetCloseTo == Global.ZeroAddress)
         assert(Txn.RekeyTo == Global.CurrentApplicationAddress)
@@ -88,65 +88,53 @@ block main:
     end
 
 
-    block Referrer_claim:
-        bytes referrer_address = Txn.Sender
+    block claim:
+        int referrer_idx = btoi(Txn.ApplicationArgs[1])
+        bytes referrer_address = Txn.Accounts[referrer_idx]
 
-        int escrow_idx = btoi(Txn.ApplicationArgs[1])
+        int escrow_idx = btoi(Txn.ApplicationArgs[2])
         bytes escrow_address = Txn.Accounts[escrow_idx]
 
-        int beneficiary_idx = btoi(Txn.ApplicationArgs[2])
-        bytes beneficiary_address = Txn.Accounts[beneficiary_idx]
-
-        int asset_idx = btoi(Txn.ApplicationArgs[3])
-        int asset = Txn.Assets[asset_idx]
-
-        int amount = btoi(Txn.ApplicationArgs[4])
-
-        # check that the referrer is the transaction sender and provides the
-        # correct escrow account that's linked to her
+        # check that the (referrer, escrow) accounts are linked
         bytes key_referrer_to_escrow = concat(MAP_ID_REFERRER_ESCROW, referrer_address)
         box<MapValue> box_referrer_to_escrow = OpenBox(key_referrer_to_escrow)
         assert(box_referrer_to_escrow.address == escrow_address)
 
-        # to claim the whole balance of the provided asset, the referrer passes amount=0
-        if amount == 0:
+        int nr_assets = Txn.NumAssets
+        for i in 0:nr_assets:
+            int asset_id = Txn.Assets[i]
             int balance
-            if asset == ALGO_ID:
+            if asset_id == ALGO_ID:
                 balance = balance(escrow_idx) - min_balance(escrow_idx)
+                inner_txn:
+                    TypeEnum: Pay
+                    Sender: escrow_address
+                    Receiver: referrer_address
+                    Amount: balance
+                    Fee: 0
+                    Note: "deflex referral program"
+                end
             else:
                 int found
-                found, balance = asset_holding_get(AssetBalance, escrow_idx, asset)
+                found, balance = asset_holding_get(AssetBalance, escrow_idx, asset_id)
                 assert(found)
-            end
-            amount = balance
-        end
-
-        # send the claimed amount to referrer
-        if asset == ALGO_ID:
-            inner_txn:
-                TypeEnum: Pay
-                Sender: escrow_address
-                Receiver: beneficiary_address
-                Amount: amount
-                Fee: 0
-            end
-        else:
-            inner_txn:
-                TypeEnum: Axfer
-                Sender: escrow_address
-                AssetReceiver: beneficiary_address
-                AssetAmount: amount
-                XferAsset: asset
-                Fee: 0
+                inner_txn:
+                    TypeEnum: Axfer
+                    Sender: escrow_address
+                    AssetReceiver: referrer_address
+                    AssetAmount: balance
+                    XferAsset: asset_id
+                    Fee: 0
+                    Note: "deflex referral program"
+                end
             end
         end
 
-        abi_return(abi_encode_uint64(amount))
         exit(1)
     end
 
 
-    block User_opt_into_assets:
+    block opt_escrow_into_assets:
         int escrow_idx = btoi(Txn.ApplicationArgs[1])
         bytes escrow_address = Txn.Accounts[escrow_idx]
 
@@ -231,11 +219,6 @@ block main:
         abi_return(referrer_address)
         exit(1)
     end
-end
-
-
-func abi_encode_uint64(value: int) bytes:
-    return itob(value)
 end
 
 
