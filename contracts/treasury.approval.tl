@@ -154,9 +154,7 @@ block main:
         for i in 0:nr_assets:
             int is_opted_in
             is_opted_in, _ = asset_holding_get(AssetBalance, escrow_idx, Txn.Assets[i])
-            int is_not_algo = Txn.Assets[i] != ALGO_ID
-            int requires_optin = !is_opted_in && is_not_algo
-            if requires_optin:
+            if !is_opted_in && (Txn.Assets[i] != ALGO_ID):
                 inner_txn:
                     TypeEnum: Axfer
                     Sender: escrow_address
