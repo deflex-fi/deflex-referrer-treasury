@@ -152,10 +152,10 @@ block main:
 
         int skipped_assets = 0
         for i in 0:nr_assets:
-            int found
-            found, _ = asset_holding_get(AssetBalance, escrow_idx, Txn.Assets[i])
+            int is_opted_in
+            is_opted_in, _ = asset_holding_get(AssetBalance, escrow_idx, Txn.Assets[i])
             int is_not_algo = Txn.Assets[i] != ALGO_ID
-            int requires_optin = !found && is_not_algo
+            int requires_optin = !is_opted_in && is_not_algo
             if requires_optin:
                 inner_txn:
                     TypeEnum: Axfer
