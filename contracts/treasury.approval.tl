@@ -240,7 +240,7 @@ end
 
 
 func transfer(asset_id: int, amount: int, sender: bytes, receiver: bytes, note: bytes):
-    if asset_id == 0:
+    if asset_id == ALGO_ID:
         inner_txn:
             TypeEnum: Pay
             Sender: sender
