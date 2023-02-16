@@ -168,3 +168,45 @@ Required network fees: `1 * minfee`
    4. Args: [Referrer address]
    5. On Complete: NoOp
    6. Rekey to: Referrer Treasury App
+
+
+
+## Compiling & building contracts
+
+Initialize a venv environment with `python -m venv env`, activate it with
+`source env/bin/activate` and install all the dependencies with:
+
+```sh
+pip install -r requirements.txt
+```
+
+To compile the contracts from tealish to teal, run:
+
+```sh
+tealish compile contracts/
+```
+
+To compile the contracts from tealish to teal and binary, run:
+
+```sh
+tealish build contracts/
+```
+
+The compiled and built contracts are then located in `./contracts/build/`
+
+
+## Testing
+
+First, get an Algorand sandbox up and running.
+
+To execute all tests, run:
+
+```sh
+python -m unittest discover tests/
+```
+
+To execute a single test file, run for example:
+
+```sh
+python tests/test_claim.py
+```

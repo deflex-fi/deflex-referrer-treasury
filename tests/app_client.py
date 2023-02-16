@@ -4,9 +4,9 @@ import base64
 from typing import List, Optional
 
 from algosdk.atomic_transaction_composer import AtomicTransactionComposer, AccountTransactionSigner, TransactionWithSigner
-from algosdk.future.transaction import SuggestedParams
-from algosdk.future import transaction
-from algosdk.future.transaction import StateSchema
+from algosdk.transaction import SuggestedParams
+from algosdk import transaction
+from algosdk.transaction import StateSchema
 from algosdk.abi import Contract
 from algosdk import encoding, account
 
