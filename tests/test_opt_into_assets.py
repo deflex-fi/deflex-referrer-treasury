@@ -4,7 +4,7 @@ from base_test_case import BaseTestCase
 from app_client import AppClient
 
 
-class TestRegisterEscrow(BaseTestCase):
+class TestOptEscrowIntoAssets(BaseTestCase):
 
     def setUp(self):
         super().setUp()

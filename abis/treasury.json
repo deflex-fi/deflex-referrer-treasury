@@ -35,6 +35,40 @@
       "desc": "Claim the commissions for all assets in the foreign assets array"
     },
     {
+      "name": "referrer_claim",
+      "args": [
+        {
+          "type": "account",
+          "name": "escrow",
+          "desc": "The referrer's escrow account"
+        },
+        {
+          "type": "account",
+          "name": "beneficiary",
+          "desc": "The beneficiary that receives the claimed asset"
+        },
+        {
+          "type": "asset",
+          "name": "asset",
+          "desc": "The asset which is claimed (or 0 if ALGO)"
+        },
+        {
+          "type": "uint64",
+          "name": "amount",
+          "desc": "The amount of the asset that is claimed (or 0 to claim it all)"
+        },
+        {
+          "type": "uint64",
+          "name": "close_out",
+          "desc": "1 if the asset is to be closed out, 0 otherwise"
+        }
+      ],
+      "returns": {
+        "type": "uint64"
+      },
+      "desc": "Claim the commissions for a given asset"
+    },
+    {
       "name": "opt_escrow_into_assets",
       "args": [
         {

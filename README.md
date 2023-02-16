@@ -76,7 +76,7 @@ Notes:
 ### Claiming commissions: `claim`
 
 This claims a referrer's commissions from her escrow account and transfers them
-to a referrer account.
+to the referrer account.
 
 The assets for which the commissions are claimed need to be specified in the
 transaction's foreign assets array. To claim ALGO, specify `0` in the foreign
@@ -99,6 +99,32 @@ Notes:
 - We thought about allowing only the referrer to claim its fees, but if the
   referrer is, e.g., a smart-contract governed by a DAO it may not be able to
   issue the necessary transactions.
+
+
+### Claiming commissions as referrer: `referrer_claim`
+
+This claims a referrer's commissions from her escrow account and transfers them
+to the referrer account. The difference with respect to the previous function
+is that this function can only be called by the referrer account itself and
+that it allows closing out an asset (ALGO cannot be closed out).
+
+Parameters:
+1. `escrow`: the referrer's escrow account that holds the commissions
+2. `beneficiary`: the beneficiary account that receives the asset
+3. `asset`: the asset that is claimed (0 if ALGO)
+4. `amount`: the amount of the asset that is claimed (0 to claim it all)
+5. `close_out`: 1 if the asset is to be closed out, 0 otherwise
+
+Box references:
+- `(0x00, referrer_address)`
+
+Required network fees: `2* minfee`
+- `1 * minfee` microALGO for the call itself
+- `1 * minfee` to send the commission to the referrer
+
+Notes:
+- Trying to close out ALGO fails
+- One can only close out the escrow account's full balance of an asset
 
 
 ### Opting an escrow into assets: `opt_escrow_into_assets`

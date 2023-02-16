@@ -244,6 +244,40 @@ class AppClient:
         return composer
 
 
+    def prepare_referrer_claim(self,
+            user: KeyPair,
+            app_id: int,
+            escrow_address: str,
+            asset_id: int,
+            amount: int,
+            close_out: bool = False,
+            beneficiary_address: str = None,
+            composer: Optional[AtomicTransactionComposer] = None,
+            params: Optional[SuggestedParams] = None) -> AtomicTransactionComposer:
+        if beneficiary_address == None:
+            beneficiary_address = user.pk
+        composer, params = self._get_defaults(composer, params)
+        composer.add_method_call(
+            app_id=app_id,
+            sender=user.pk,
+            method=self.contract.get_method_by_name('referrer_claim'),
+            sp=params,
+            method_args=[
+                escrow_address,
+                beneficiary_address,
+                asset_id,
+                amount,
+                1 if close_out else 0,
+            ],
+            boxes=[
+                (app_id, bytes([0x00]) + encoding.decode_address(user.pk)),
+            ],
+            signer=AccountTransactionSigner(user.sk),
+        )
+        composer.txn_list[-1].txn.fee = 2000
+        return composer
+
+
     def prepare_get_escrow_by_referrer(self,
             user: KeyPair,
             app_id: int,

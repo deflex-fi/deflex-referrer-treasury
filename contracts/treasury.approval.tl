@@ -46,6 +46,7 @@ block main:
     switch Txn.ApplicationArgs[0]:
         method("register_escrow(address)void"): register_escrow
         method("claim(account,account)void"): claim
+        method("referrer_claim(account,account,asset,uint64,uint64)uint64"): referrer_claim
         method("opt_escrow_into_assets(pay,account)void"): opt_escrow_into_assets
         method("get_escrow_by_referrer(address)address"): get_escrow_by_referrer
         method("get_referrer_by_escrow(address)address"): get_referrer_by_escrow
@@ -103,33 +104,69 @@ block main:
         int nr_assets = Txn.NumAssets
         for i in 0:nr_assets:
             int asset_id = Txn.Assets[i]
-            int balance
-            if asset_id == ALGO_ID:
-                balance = balance(escrow_idx) - min_balance(escrow_idx)
-                inner_txn:
-                    TypeEnum: Pay
-                    Sender: escrow_address
-                    Receiver: referrer_address
-                    Amount: balance
-                    Fee: 0
-                    Note: "deflex referral program"
-                end
-            else:
-                int found
-                found, balance = asset_holding_get(AssetBalance, escrow_idx, asset_id)
-                assert(found)
-                inner_txn:
-                    TypeEnum: Axfer
-                    Sender: escrow_address
-                    AssetReceiver: referrer_address
-                    AssetAmount: balance
-                    XferAsset: asset_id
-                    Fee: 0
-                    Note: "deflex referral program"
-                end
+            int amount = get_balance(escrow_idx, asset_id)
+            bytes note = "deflex referral program"
+            transfer(asset_id, amount, escrow_address, referrer_address, note)
+        end
+
+        exit(1)
+    end
+
+
+    block referrer_claim:
+        bytes referrer_address = Txn.Sender
+
+        int escrow_idx = btoi(Txn.ApplicationArgs[1])
+        bytes escrow_address = Txn.Accounts[escrow_idx]
+
+        int beneficiary_idx = btoi(Txn.ApplicationArgs[2])
+        bytes beneficiary_address = Txn.Accounts[beneficiary_idx]
+
+        int asset_idx = btoi(Txn.ApplicationArgs[3])
+        int asset_id = Txn.Assets[asset_idx]
+
+        int amount = btoi(Txn.ApplicationArgs[4])
+
+        # the caller specifies 1 to close the asset to the beneficiary (thus
+        # freeing up the MBR), and 0 otherwise
+        int close_out = btoi(Txn.ApplicationArgs[5])
+        assert((close_out == 0) || (close_out == 1))
+
+        # check that the (referrer, escrow) accounts are linked
+        bytes key_referrer_to_escrow = concat(MAP_ID_REFERRER_ESCROW, referrer_address)
+        box<MapValue> box_referrer_to_escrow = OpenBox(key_referrer_to_escrow)
+        assert(box_referrer_to_escrow.address == escrow_address)
+
+        # the escrow account's balance for the given asset
+        int balance = get_balance(escrow_idx, asset_id)
+
+        # to claim the whole balance of the provided asset, the referrer passes amount=0
+        if amount == 0:
+            amount = balance
+        end
+
+        bytes note = "deflex referral program"
+        if close_out == 0:
+            transfer(asset_id, amount, escrow_address, beneficiary_address, note)
+        else:
+            # we only allow closing out assets, the escrow account cannot be closed
+            assert(asset_id != ALGO_ID)
+            # we set the amount to the asset's balance as we cannot close out an
+            # asset only partially
+            amount = balance
+            inner_txn:
+                TypeEnum: Axfer
+                Sender: escrow_address
+                AssetReceiver: beneficiary_address
+                AssetAmount: balance
+                XferAsset: asset_id
+                AssetCloseTo: beneficiary_address
+                Fee: 0
+                Note: note
             end
         end
 
+        abi_return(itob(amount))
         exit(1)
     end
 
@@ -217,6 +254,44 @@ block main:
         abi_return(referrer_address)
         exit(1)
     end
+end
+
+
+func transfer(asset_id: int, amount: int, sender: bytes, receiver: bytes, note: bytes):
+    if asset_id == 0:
+        inner_txn:
+            TypeEnum: Pay
+            Sender: sender
+            Receiver: receiver
+            Amount: amount
+            Fee: 0
+            Note: note
+        end
+    else:
+        inner_txn:
+            TypeEnum: Axfer
+            Sender: sender
+            AssetReceiver: receiver
+            AssetAmount: amount
+            XferAsset: asset_id
+            Fee: 0
+            Note: note
+        end
+    end
+    return
+end
+
+
+func get_balance(account_idx: int, asset_id: int) int:
+    int balance
+    if asset_id == ALGO_ID:
+        balance = balance(account_idx) - min_balance(account_idx)
+    else:
+        int is_opted_in
+        is_opted_in, balance = asset_holding_get(AssetBalance, account_idx, asset_id)
+        assert(is_opted_in)
+    end
+    return balance
 end
 
 
