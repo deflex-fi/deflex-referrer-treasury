@@ -1,0 +1,97 @@
+{
+  "name": "Deflex Referrer Treasury App",
+  "methods": [
+    {
+      "name": "Referrer_register_escrow",
+      "args": [
+        {
+          "type": "address",
+          "name": "referrer_address",
+          "desc": "The address of the referrer. The registered escrow can send only to this address."
+        }
+      ],
+      "returns": {
+        "type": "void"
+      },
+      "desc": "Register an escrow address that collects fees for a referrer"
+    },
+    {
+      "name": "Referrer_claim",
+      "args": [
+        {
+          "type": "account",
+          "name": "escrow",
+          "desc": "The referrer's escrow account"
+        },
+        {
+          "type": "account",
+          "name": "beneficiary",
+          "desc": "The beneficiary that receives the claimed asset"
+        },
+        {
+          "type": "asset",
+          "name": "asset",
+          "desc": "The asset which is claimed (or 0 if ALGO)"
+        },
+        {
+          "type": "uint64",
+          "name": "amount",
+          "desc": "The amount of the asset that is claimed (or 0 to claim it all)"
+        }
+      ],
+      "returns": {
+        "type": "uint64"
+      },
+      "desc": "Claim ones commissions"
+    },
+    {
+      "name": "User_opt_into_assets",
+      "args": [
+        {
+          "type": "pay",
+          "name": "funding_txn",
+          "desc": "A payment transaction to cover the escrow's MBR increase of 100'000 microALGO per asset in the foreign assets array"
+        },
+        {
+          "type": "account",
+          "name": "escrow",
+          "desc": "The escrow that is opted into the assets"
+        }
+      ],
+      "returns": {
+        "type": "void"
+      },
+      "desc": "Opt the app into all assets in the foreign assets array."
+    },
+    {
+      "name": "get_escrow_by_referrer",
+      "args": [
+        {
+          "type": "address",
+          "name": "referrer",
+          "desc": "The referrer address"
+        }
+      ],
+      "returns": {
+        "type": "address"
+      },
+      "desc": "Get a referrer's escrow address (and the zero-address if none exists)"
+    },
+    {
+      "name": "get_referrer_by_escrow",
+      "args": [
+        {
+          "type": "address",
+          "name": "escrow",
+          "desc": "The escrow address"
+        }
+      ],
+      "returns": {
+        "type": "address"
+      },
+      "desc": "Get the referrer address that controls an escrow address (and the zero-address if none exists)"
+    }
+  ],
+  "networks": {},
+  "desc": "This app collects the commissions for referrers that they can claim at any point"
+}
