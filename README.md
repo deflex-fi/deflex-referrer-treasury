@@ -71,6 +71,9 @@ Notes:
 - The escrow account must rekey itself to the app account
 - The escrow account must contain at least 0.157 ALGO, 0.057 of which are sent
   to the app account to cover for the MBR increase due to the boxes
+- Once an escrow is linked to a referrer, it cannot be unlinked anymore. This
+  allows for easier caching of (referrer, escrow) mappings on the application
+  side (otherwise we'd need too many indexer lookups).
 
 
 ### Claiming commissions: `claim`
