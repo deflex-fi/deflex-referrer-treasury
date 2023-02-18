@@ -75,7 +75,7 @@ block main:
         for i in 0:nr_assets:
             int asset_id = Txn.Assets[i]
             int amount = get_balance(escrow_idx, asset_id)
-            bytes note = "deflex referral program"
+            bytes note = "deflex:udeflex_commission"
             transfer(asset_id, amount, escrow_address, referrer_address, note)
         end
 
@@ -112,7 +112,7 @@ block main:
             amount = balance
         end
 
-        bytes note = "deflex referral program"
+        bytes note = "deflex:udeflex_commission"
         if close_out == 0:
             transfer(asset_id, amount, escrow_address, beneficiary_address, note)
         else:
