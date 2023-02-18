@@ -3,8 +3,8 @@ import os
 import base64
 from typing import List, Optional
 
-from algosdk.atomic_transaction_composer import AtomicTransactionComposer, AccountTransactionSigner, TransactionWithSigner
-from algosdk.transaction import SuggestedParams
+from algosdk.atomic_transaction_composer import AtomicTransactionComposer, AccountTransactionSigner, TransactionWithSigner, LogicSigTransactionSigner
+from algosdk.transaction import SuggestedParams, LogicSigAccount
 from algosdk import transaction
 from algosdk.transaction import StateSchema
 from algosdk.abi import Contract
@@ -28,12 +28,33 @@ class AppClient:
             self.clearstate_teal, _  = tealish.compile_program(self.clearstate_tealish)
             self.clearstate_teal = '\n'.join(self.clearstate_teal)
             self.clearstate_bytecode = self.compile_program(self.clearstate_teal)
+        with open(basepath + "escrow_template.tl") as f:
+            self.template_tealish = f.read()
+            self.template_teal, _  = tealish.compile_program(self.template_tealish)
+            self.template_teal = '\n'.join(self.template_teal)
+            self.template_bytecode = self.compile_program(self.template_teal)
         self.contract = self._read_contract()
 
 
     def compile_program(self, source_code):
         compile_response = self.algod_client.compile(source_code)
         return base64.b64decode(compile_response['result'])
+
+
+    def escrow_logicsig(self, referrer_address: str, app_id: int):
+        raw_address = encoding.decode_address(referrer_address)
+        raw_app_id = app_id.to_bytes(8, byteorder='big')
+        template = self._overwrite(self.template_bytecode, raw_address + raw_app_id, 3)
+        return transaction.LogicSigAccount(template)
+
+
+    def escrow_address(self, referrer_address: str, app_id: int):
+        return self.escrow_logicsig(referrer_address, app_id).address()
+
+
+    def escrow_template(self):
+        """Prints the escrow template in a format that can be put into tealish code"""
+        return "".join(['\\x%02x' % b for b in self.template_bytecode])
 
 
     def get_global_schema(self):
@@ -148,36 +169,31 @@ class AppClient:
             user: KeyPair,
             app_id: int,
             referrer_address: str,
-            escrow: KeyPair = None,
+            escrow: LogicSigAccount = None,
             composer: Optional[AtomicTransactionComposer] = None,
             params: Optional[SuggestedParams] = None) -> AtomicTransactionComposer:
         composer, params = self._get_defaults(composer, params)
         if escrow == None:
-            escrow_key, escrow_address = account.generate_account()
-            escrow = KeyPair(escrow_address, escrow_key)
+            escrow = self.escrow_logicsig(referrer_address, app_id)
         # fund escrow
         composer = composer.add_transaction(TransactionWithSigner(transaction.PaymentTxn(
             sender=user.pk,
             sp=params,
-            receiver=escrow.pk,
-            amt=157_000,
+            receiver=escrow.address(),
+            amt=100_000,
         ), AccountTransactionSigner(user.sk)))
-        composer.txn_list[-1].txn.fee = 3000
+        composer.txn_list[-1].txn.fee = 2000
         # call app
         composer.add_method_call(
             app_id=app_id,
-            sender=escrow.pk,
+            sender=escrow.address(),
             method=self.contract.get_method_by_name('register_escrow'),
             sp=params,
             method_args=[
                 referrer_address,
             ],
-            boxes=[
-                (app_id, bytes([0x00]) + encoding.decode_address(referrer_address)),
-                (app_id, bytes([0x01]) + encoding.decode_address(escrow.pk)),
-            ],
             rekey_to=self.app_address(app_id),
-            signer=AccountTransactionSigner(escrow.sk),
+            signer=LogicSigTransactionSigner(escrow),
         )
         composer.txn_list[-1].txn.fee = 0
         return composer
@@ -234,9 +250,6 @@ class AppClient:
                 referrer_address,
                 escrow_address,
             ],
-            boxes=[
-                (app_id, bytes([0x00]) + encoding.decode_address(referrer_address)),
-            ],
             foreign_assets=asset_ids,
             signer=AccountTransactionSigner(user.sk),
         )
@@ -269,9 +282,6 @@ class AppClient:
                 amount,
                 1 if close_out else 0,
             ],
-            boxes=[
-                (app_id, bytes([0x00]) + encoding.decode_address(user.pk)),
-            ],
             signer=AccountTransactionSigner(user.sk),
         )
         composer.txn_list[-1].txn.fee = 2000
@@ -292,32 +302,6 @@ class AppClient:
             sp=params,
             method_args=[
                 referrer_address,
-            ],
-            boxes=[
-                (app_id, bytes([0x00]) + encoding.decode_address(referrer_address)),
-            ],
-            signer=AccountTransactionSigner(user.sk),
-        )
-        return composer
-
-
-    def prepare_get_referrer_by_escrow(self,
-            user: KeyPair,
-            app_id: int,
-            escrow_address: str,
-            composer: Optional[AtomicTransactionComposer] = None,
-            params: Optional[SuggestedParams] = None) -> AtomicTransactionComposer:
-        composer, params = self._get_defaults(composer, params)
-        composer.add_method_call(
-            app_id=app_id,
-            sender=user.pk,
-            method=self.contract.get_method_by_name('get_referrer_by_escrow'),
-            sp=params,
-            method_args=[
-                escrow_address,
-            ],
-            boxes=[
-                (app_id, bytes([0x01]) + encoding.decode_address(escrow_address)),
             ],
             signer=AccountTransactionSigner(user.sk),
         )
@@ -341,3 +325,7 @@ class AppClient:
         with open(filename) as f:
             contract_raw = f.read()
         return Contract.from_json(contract_raw)
+
+
+    def _overwrite(self, target: list, new_content: list, start_pos: int) -> list:
+        return target[:start_pos] + new_content + target[start_pos+len(new_content):]

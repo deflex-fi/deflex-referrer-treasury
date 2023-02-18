@@ -99,21 +99,7 @@
       "returns": {
         "type": "address"
       },
-      "desc": "Get a referrer's escrow address (and the zero-address if none exists)"
-    },
-    {
-      "name": "get_referrer_by_escrow",
-      "args": [
-        {
-          "type": "address",
-          "name": "escrow",
-          "desc": "The escrow address"
-        }
-      ],
-      "returns": {
-        "type": "address"
-      },
-      "desc": "Get the referrer address that controls an escrow address (and the zero-address if none exists)"
+      "desc": "Get a referrer's escrow address"
     }
   ],
   "networks": {},

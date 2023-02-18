@@ -1,13 +1,7 @@
 #pragma version 8
 
-struct MapValue:
-  address: bytes[32]
-end
-
 const int ALGO_ID = 0
-const bytes MAP_ID_REFERRER_ESCROW = "\x00"
-const bytes MAP_ID_ESCROW_REFERRER = "\x01"
-
+const bytes ESCROW_TEMPLATE = "\x08\x80\x28\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xff\xff\xff\xff\xff\xff\xff\xff\x35\x00\x80\x05\x61\x70\x70\x49\x44\x34\x00\x81\x20\x5b\x16\x50\x03\x35\x01\x31\x18\x34\x00\x81\x20\x5b\x12\x44\x31\x19\x81\x00\x12\x44\x31\x20\x34\x01\x12\x44\x36\x1a\x00\x80\x04\x5c\x96\xed\x70\x12\x44\x36\x1a\x01\x34\x00\x57\x00\x20\x12\x44\x81\x01\x43"
 
 if Txn.ApplicationID == 0:
     # Create app
@@ -49,35 +43,19 @@ block main:
         method("referrer_claim(account,account,asset,uint64,uint64)uint64"): referrer_claim
         method("opt_escrow_into_assets(pay,account)void"): opt_escrow_into_assets
         method("get_escrow_by_referrer(address)address"): get_escrow_by_referrer
-        method("get_referrer_by_escrow(address)address"): get_referrer_by_escrow
     end
 
 
     block register_escrow:
+        # the escrow must be rekeyed to the app
+        assert(Txn.RekeyTo == Global.CurrentApplicationAddress)
         assert(Txn.CloseRemainderTo == Global.ZeroAddress)
         assert(Txn.AssetCloseTo == Global.ZeroAddress)
-        assert(Txn.RekeyTo == Global.CurrentApplicationAddress)
 
+        # check that the (referrer, escrow) accounts are linked
         bytes escrow_address = Txn.Sender
         bytes referrer_address = Txn.ApplicationArgs[1]
-        assert(len(referrer_address) == 32)
-        assert(referrer_address != escrow_address)
-        assert(referrer_address != Global.ZeroAddress)
-        assert(escrow_address != Global.ZeroAddress)
-
-        # cover the MBR increase in the app account due to the boxes by
-        # taking the necessary 0.057 ALGO from the escrow account
-        transfer(ALGO_ID, 57000, escrow_address, Global.CurrentApplicationAddress, "")
-
-        # asserts that the box does not exist yet
-        bytes key_referrer_to_escrow = concat(MAP_ID_REFERRER_ESCROW, referrer_address)
-        box<MapValue> box_referrer_to_escrow = CreateBox(key_referrer_to_escrow)
-        box_referrer_to_escrow.address = escrow_address
-
-        # asserts that the box does not exist yet
-        bytes key_escrow_to_referrer = concat(MAP_ID_ESCROW_REFERRER, escrow_address)
-        box<MapValue> box_escrow_to_referrer = CreateBox(key_escrow_to_referrer)
-        box_escrow_to_referrer.address = referrer_address
+        assert_accounts_linked(referrer_address, escrow_address)
 
         exit(1)
     end
@@ -91,9 +69,7 @@ block main:
         bytes escrow_address = Txn.Accounts[escrow_idx]
 
         # check that the (referrer, escrow) accounts are linked
-        bytes key_referrer_to_escrow = concat(MAP_ID_REFERRER_ESCROW, referrer_address)
-        box<MapValue> box_referrer_to_escrow = OpenBox(key_referrer_to_escrow)
-        assert(box_referrer_to_escrow.address == escrow_address)
+        assert_accounts_linked(referrer_address, escrow_address)
 
         int nr_assets = Txn.NumAssets
         for i in 0:nr_assets:
@@ -108,10 +84,12 @@ block main:
 
 
     block referrer_claim:
-        bytes referrer_address = Txn.Sender
-
         int escrow_idx = btoi(Txn.ApplicationArgs[1])
         bytes escrow_address = Txn.Accounts[escrow_idx]
+
+        # check that the (referrer, escrow) accounts are linked
+        bytes referrer_address = Txn.Sender
+        assert_accounts_linked(referrer_address, escrow_address)
 
         int beneficiary_idx = btoi(Txn.ApplicationArgs[2])
         bytes beneficiary_address = Txn.Accounts[beneficiary_idx]
@@ -125,11 +103,6 @@ block main:
         # freeing up the MBR), and 0 otherwise
         int close_out = btoi(Txn.ApplicationArgs[5])
         assert((close_out == 0) || (close_out == 1))
-
-        # check that the (referrer, escrow) accounts are linked
-        bytes key_referrer_to_escrow = concat(MAP_ID_REFERRER_ESCROW, referrer_address)
-        box<MapValue> box_referrer_to_escrow = OpenBox(key_referrer_to_escrow)
-        assert(box_referrer_to_escrow.address == escrow_address)
 
         # the escrow account's balance for the given asset
         int balance = get_balance(escrow_idx, asset_id)
@@ -204,38 +177,25 @@ block main:
 
     block get_escrow_by_referrer:
         bytes referrer_address = Txn.ApplicationArgs[1]
-        bytes key_referrer_to_escrow = concat(MAP_ID_REFERRER_ESCROW, referrer_address)
-
-        bytes escrow_address = Global.ZeroAddress
-        int length
-        int found
-        length, found = box_len(key_referrer_to_escrow)
-        if found:
-            box<MapValue> box_referrer_to_escrow = OpenBox(key_referrer_to_escrow)
-            escrow_address = box_referrer_to_escrow.address
-        end
-
-        abi_return(escrow_address)
+        abi_return(get_escrow_address(referrer_address))
         exit(1)
     end
+end
 
 
-    block get_referrer_by_escrow:
-        bytes escrow_address = Txn.ApplicationArgs[1]
-        bytes key_escrow_to_referrer = concat(MAP_ID_ESCROW_REFERRER, escrow_address)
+func assert_accounts_linked(referrer_address: bytes, escrow_address: bytes):
+    bytes derived_escrow_address = get_escrow_address(referrer_address)
+    assert(escrow_address == derived_escrow_address)
+    return
+end
 
-        bytes referrer_address = Global.ZeroAddress
-        int length
-        int found
-        length, found = box_len(key_escrow_to_referrer)
-        if found:
-            box<MapValue> box_escrow_to_referrer = OpenBox(key_escrow_to_referrer)
-            referrer_address = box_escrow_to_referrer.address
-        end
 
-        abi_return(referrer_address)
-        exit(1)
-    end
+func get_escrow_address(referrer_address: bytes) bytes:
+    assert(len(referrer_address) == 32)
+    bytes program = ESCROW_TEMPLATE
+    program = replace2( 3, program, referrer_address)
+    program = replace2(35, program, itob(Global.CurrentApplicationID))
+    return sha512_256(concat("Program", program))
 end
 
 

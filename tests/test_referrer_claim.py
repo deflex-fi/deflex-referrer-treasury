@@ -13,7 +13,7 @@ class TestReferrerClaim(BaseTestCase):
         self.app_id = self.app_client.create_app(self.creator)
         self.user = self.create_account(initial_funding=10_000_000)
         self.referrer = self.create_account(initial_funding=10_000_000)
-        self.escrow = self.create_account(initial_funding=0)
+        self.escrow = self.app_client.escrow_logicsig(self.referrer.pk, self.app_id)
         self.app_client.prepare_register_escrow(
                 self.user,
                 self.app_id,
@@ -26,7 +26,7 @@ class TestReferrerClaim(BaseTestCase):
         self.app_client.prepare_opt_into_assets(
                 self.user,
                 self.app_id,
-                self.escrow.pk,
+                self.escrow.address(),
                 [asset_id]
         ).execute(self.algod_client, 1000)
 
@@ -34,13 +34,13 @@ class TestReferrerClaim(BaseTestCase):
     def test_claim_algo(self):
         # opt into asset
         asset_id = 0 # ALGO
-        self.send_asset(self.creator, self.escrow.pk, asset_id, 5000)
+        self.send_asset(self.creator, self.escrow.address(), asset_id, 5000)
         # claim for the first time
         self.opt_account_into_asset(self.referrer, asset_id)
         result = self.app_client.prepare_referrer_claim(
                 self.referrer,
                 self.app_id,
-                self.escrow.pk,
+                self.escrow.address(),
                 asset_id,
                 5000,
         ).execute(self.algod_client, 1000)
@@ -51,14 +51,14 @@ class TestReferrerClaim(BaseTestCase):
         # opt into asset
         asset_id = self.create_asset(self.creator)
         self.opt_escrow_into_asset(asset_id)
-        self.send_asset(self.creator, self.escrow.pk, asset_id, 123)
+        self.send_asset(self.creator, self.escrow.address(), asset_id, 123)
         # claim for the first time
         self.opt_account_into_asset(self.referrer, asset_id)
         holdings1 = self.get_asset_holding(self.referrer.pk, asset_id)
         result = self.app_client.prepare_referrer_claim(
                 self.referrer,
                 self.app_id,
-                self.escrow.pk,
+                self.escrow.address(),
                 asset_id,
                 9,
         ).execute(self.algod_client, 1000)
@@ -70,7 +70,7 @@ class TestReferrerClaim(BaseTestCase):
         result = self.app_client.prepare_referrer_claim(
                 self.referrer,
                 self.app_id,
-                self.escrow.pk,
+                self.escrow.address(),
                 asset_id,
                 0,
         ).execute(self.algod_client, 1000)
@@ -84,14 +84,14 @@ class TestReferrerClaim(BaseTestCase):
         # opt into asset
         asset_id = self.create_asset(self.creator)
         self.opt_escrow_into_asset(asset_id)
-        self.send_asset(self.creator, self.escrow.pk, asset_id, 123)
+        self.send_asset(self.creator, self.escrow.address(), asset_id, 123)
         # claim for the first time
         self.opt_account_into_asset(beneficiary, asset_id)
         holdings1 = self.get_asset_holding(beneficiary.pk, asset_id)
         result = self.app_client.prepare_referrer_claim(
                 self.referrer,
                 self.app_id,
-                self.escrow.pk,
+                self.escrow.address(),
                 asset_id,
                 9,
                 beneficiary_address=beneficiary.pk,
@@ -103,12 +103,12 @@ class TestReferrerClaim(BaseTestCase):
 
     def test_claim_more_algo_than_owned_fails(self):
         asset_id = 0 # ALGO
-        self.send_asset(self.creator, self.escrow.pk, asset_id, 92384)
+        self.send_asset(self.creator, self.escrow.address(), asset_id, 92384)
         with self.assertRaises(Exception):
             self.app_client.prepare_referrer_claim(
                     self.referrer,
                     self.app_id,
-                    self.escrow.pk,
+                    self.escrow.address(),
                     asset_id,
                     92385,
             ).execute(self.algod_client, 1000)
@@ -118,7 +118,7 @@ class TestReferrerClaim(BaseTestCase):
         # opt into asset
         asset_id = self.create_asset(self.creator)
         self.opt_escrow_into_asset(asset_id)
-        self.send_asset(self.creator, self.escrow.pk, asset_id, 123)
+        self.send_asset(self.creator, self.escrow.address(), asset_id, 123)
         # claim for the first time
         self.opt_account_into_asset(self.referrer, asset_id)
         with self.assertRaises(Exception):
@@ -134,7 +134,7 @@ class TestReferrerClaim(BaseTestCase):
     def test_claim_algo_from_someone_elses_escrow(self):
         # set up second escrow account for a second referrer, and fund it
         self.referrer2 = self.create_account(initial_funding=10_000_000)
-        self.escrow2 = self.create_account(initial_funding=0)
+        self.escrow2 = self.app_client.escrow_logicsig(self.referrer2.pk, self.app_id)
         self.app_client.prepare_register_escrow(
                 self.user,
                 self.app_id,
@@ -142,13 +142,13 @@ class TestReferrerClaim(BaseTestCase):
                 self.escrow2,
         ).execute(self.algod_client, 1000)
         asset_id = 0 # ALGO
-        self.send_asset(self.creator, self.escrow2.pk, asset_id, 5000)
+        self.send_asset(self.creator, self.escrow2.address(), asset_id, 5000)
         # now try to claim from first referrer
         with self.assertRaises(Exception):
             self.app_client.prepare_referrer_claim(
                     self.referrer,
                     self.app_id,
-                    self.escrow2.pk,
+                    self.escrow2.address(),
                     asset_id,
                     150,
             ).execute(self.algod_client, 1000)
@@ -158,14 +158,14 @@ class TestReferrerClaim(BaseTestCase):
         # opt into asset
         asset_id = self.create_asset(self.creator)
         self.opt_escrow_into_asset(asset_id)
-        self.send_asset(self.creator, self.escrow.pk, asset_id, 123)
+        self.send_asset(self.creator, self.escrow.address(), asset_id, 123)
         # claim the asset
         self.opt_account_into_asset(self.referrer, asset_id)
         holdings1 = self.get_asset_holding(self.referrer.pk, asset_id)
         result = self.app_client.prepare_referrer_claim(
                 self.referrer,
                 self.app_id,
-                self.escrow.pk,
+                self.escrow.address(),
                 asset_id,
                 9,
                 close_out=True,
@@ -176,12 +176,12 @@ class TestReferrerClaim(BaseTestCase):
         self.assertEqual(123, holdings2 - holdings1)
         # we can't send the asset anymore to the escrow since it's opted out
         with self.assertRaises(Exception):
-            self.send_asset(self.creator, self.escrow.pk, asset_id, 5000)
+            self.send_asset(self.creator, self.escrow.address(), asset_id, 5000)
 
 
     def test_claim_algo_with_close_out_fails(self):
         asset_id = 0
-        self.send_asset(self.creator, self.escrow.pk, asset_id, 123)
+        self.send_asset(self.creator, self.escrow.address(), asset_id, 123)
         # claim the asset
         self.opt_account_into_asset(self.referrer, asset_id)
         holdings1 = self.get_asset_holding(self.referrer.pk, asset_id)
@@ -189,7 +189,7 @@ class TestReferrerClaim(BaseTestCase):
             self.app_client.prepare_referrer_claim(
                     self.referrer,
                     self.app_id,
-                    self.escrow.pk,
+                    self.escrow.address(),
                     asset_id,
                     9,
                     close_out=True,

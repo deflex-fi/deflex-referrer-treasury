@@ -2,7 +2,7 @@
 
 Clients that integrate Deflex earn a commission for every swap that is
 performed on their platform and they can provide a *referrer address* which
-receives this commission. Since Deflex charges fees in the output asset the
+receives this commission. Since Deflex charges fees in the output asset, the
 referrer address must be opted into many different ASAs to actually earn the
 commission. If the referrer address isn't opted into an asset, it cannot
 receive the commission.
@@ -16,35 +16,11 @@ The pooled commissions can be claimed and sent to the referrer any time as long
 as the referrer has opted into the necessary assets.
 
 
-## State
+## Deterministic Escrow Address
 
-The app keeps all state in box storage. We maintain two maps, one from the
-referrer address to its escrow address and vice versa.
-
-### Map: Referrer -> Escrow
-
-Schema:
-- Key:   `(0x00, referrer_address)`
-- Value: `escrow_address`
-- Length: 1 + 32 + 32 = 65 bytes
-
-Cost per box entry:
-- 0.0025 ALGO for box creation
-- 0.0004 Algos * 65 = 0.026
-- Total: 0.0285
-
-
-### Map: Escrow -> Referrer
-
-Schema:
-- Key:   `(0x01, escrow_address)`
-- Value: `referrer_address`
-- Length: 1 + 32 + 32 = 65 bytes
-
-Cost per box entry:
-- 0.0025 ALGO for box creation
-- 0.0004 Algos * 65 = 0.26
-- Total: 0.0285
+We use a logicsig that is templated with the referrer address and this app's ID
+to derive a deterministic address for the escrow account. This logicsig only
+permits calling the app's `register_escrow` function.
 
 
 ## Methods
@@ -52,28 +28,19 @@ Cost per box entry:
 ### Registering an escrow account: `register_escrow`
 
 Registers an escrow account that collects commissions for a referrer. A
-referrer can have at most one escrow account.
+referrer can have only one escrow account.
 
 Parameters:
 1. `referrer_address`: the address of the referrer account that is escrow is
    linked to.
 
-Box references:
-- `(0x00, referrer_address)`
-- `(0x01, escrow_address)`
-
-Required network fees: `2 * minfee`
+Required network fees: `1 * minfee`
 - `1 * minfee` microALGO for the call itself
-- `1 * minfee` to send 0.057 ALGO to the app account
 
 Notes:
 - This function must be called from the escrow account
 - The escrow account must rekey itself to the app account
-- The escrow account must contain at least 0.157 ALGO, 0.057 of which are sent
-  to the app account to cover for the MBR increase due to the boxes
-- Once an escrow is linked to a referrer, it cannot be unlinked anymore. This
-  allows for easier caching of (referrer, escrow) mappings on the application
-  side (otherwise we'd need too many indexer lookups).
+- Once an escrow is rekeyed to a referrer, it cannot be unlinked anymore.
 
 
 ### Claiming commissions: `claim`
@@ -88,9 +55,6 @@ assets array.
 Parameters:
 1. `referrer`: the referrer's account that receives the commissions
 2. `escrow`: the referrer's escrow account that holds the commissions
-
-Box references:
-- `(0x00, referrer_address)`
 
 Required network fees: `minfee * (1 + len(foreign_assets))`
 - `1 * minfee` microALGO for the call itself
@@ -117,9 +81,6 @@ Parameters:
 3. `asset`: the asset that is claimed (0 if ALGO)
 4. `amount`: the amount of the asset that is claimed (0 to claim it all)
 5. `close_out`: 1 if the asset is to be closed out, 0 otherwise
-
-Box references:
-- `(0x00, referrer_address)`
 
 Required network fees: `2* minfee`
 - `1 * minfee` microALGO for the call itself
@@ -157,31 +118,12 @@ Required network fees: `minfee * (1 + len(foreign_assets))`
 
 ### Getting a referrer's escrow address: `get_escrow_by_referrer`
 
-Return a referrer's registered escrow address (and the zero-address if none
-exists).
+Return a referrer's registered escrow address.
 
 Parameters:
 1. `referrer`: the referrer's address
 
-Box references:
-- `(0x00, referrer_address)`
-
 Required network fees: `1 * minfee`
-
-
-### Getting an escrow's linked referrer address: `get_referrer_by_escrow`
-
-Return the referrer address that's linked to the provided escrow (and the
-zero-address if none exists).
-
-Parameters:
-1. `escrow`: the escrow's address
-
-Box references:
-- `(0x01, escrow_address)`
-
-Required network fees: `1 * minfee`
-
 
 
 ## Transaction Groups
@@ -191,7 +133,7 @@ Required network fees: `1 * minfee`
 1. Payment _(to increase the minimum balance of the limit-order app)_
    1. Sender: Any Account
    2. Receiver: Escrow account
-   3. Amount: `157_000` (MBR for account and box storage)
+   3. Amount: `100_000` (MBR for account and box storage)
 2. Application _(to initialize the app)_
    1. ID: Referrer Treasury App
    2. Method: `register_escrow`

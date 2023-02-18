@@ -13,7 +13,7 @@ class TestOptEscrowIntoAssets(BaseTestCase):
         self.app_id = self.app_client.create_app(self.creator)
         self.user = self.create_account(initial_funding=10_000_000)
         self.referrer = self.create_account(initial_funding=10_000_000)
-        self.escrow = self.create_account(initial_funding=0)
+        self.escrow = self.app_client.escrow_logicsig(self.referrer.pk, self.app_id)
         self.app_client.prepare_register_escrow(
                 self.user,
                 self.app_id,
@@ -26,7 +26,7 @@ class TestOptEscrowIntoAssets(BaseTestCase):
         self.app_client.prepare_opt_into_assets(
                 self.user,
                 self.app_id,
-                self.escrow.pk,
+                self.escrow.address(),
                 []
         ).execute(self.algod_client, 1000)
 
@@ -36,10 +36,10 @@ class TestOptEscrowIntoAssets(BaseTestCase):
         self.app_client.prepare_opt_into_assets(
                 self.user,
                 self.app_id,
-                self.escrow.pk,
+                self.escrow.address(),
                 [asset_id]
         ).execute(self.algod_client, 1000)
-        self.send_asset(self.creator, self.escrow.pk, asset_id, 123)
+        self.send_asset(self.creator, self.escrow.address(), asset_id, 123)
 
 
     def test_opt_into_multiple_assets(self):
@@ -49,13 +49,13 @@ class TestOptEscrowIntoAssets(BaseTestCase):
         self.app_client.prepare_opt_into_assets(
                 self.user,
                 self.app_id,
-                self.escrow.pk,
+                self.escrow.address(),
                 [asset1_id, asset2_id, asset3_id]
         ).execute(self.algod_client, 1000)
         # test that we can send assets to the escrow
-        self.send_asset(self.creator, self.escrow.pk, asset1_id, 123)
-        self.send_asset(self.creator, self.escrow.pk, asset2_id, 456)
-        self.send_asset(self.creator, self.escrow.pk, asset3_id, 789)
+        self.send_asset(self.creator, self.escrow.address(), asset1_id, 123)
+        self.send_asset(self.creator, self.escrow.address(), asset2_id, 456)
+        self.send_asset(self.creator, self.escrow.address(), asset3_id, 789)
 
 
     def test_opt_into_the_same_asset_twice(self):
@@ -63,14 +63,14 @@ class TestOptEscrowIntoAssets(BaseTestCase):
         self.app_client.prepare_opt_into_assets(
                 self.user,
                 self.app_id,
-                self.escrow.pk,
+                self.escrow.address(),
                 [asset_id]
         ).execute(self.algod_client, 1000)
         # opting in again doesn't do anything
         self.app_client.prepare_opt_into_assets(
                 self.user,
                 self.app_id,
-                self.escrow.pk,
+                self.escrow.address(),
                 [asset_id]
         ).execute(self.algod_client, 1000)
 
