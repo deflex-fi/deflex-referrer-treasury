@@ -133,7 +133,7 @@ Required network fees: `1 * minfee`
 1. Payment _(to increase the minimum balance of the limit-order app)_
    1. Sender: Any Account
    2. Receiver: Escrow account
-   3. Amount: `100_000` (MBR for account and box storage)
+   3. Amount: `100_000` (MBR for account)
 2. Application _(to initialize the app)_
    1. ID: Referrer Treasury App
    2. Method: `register_escrow`
