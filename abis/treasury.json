@@ -2,21 +2,7 @@
   "name": "Deflex Referrer Treasury App",
   "methods": [
     {
-      "name": "register_escrow",
-      "args": [
-        {
-          "type": "address",
-          "name": "referrer_address",
-          "desc": "The address of the referrer. The registered escrow can send only to this address."
-        }
-      ],
-      "returns": {
-        "type": "void"
-      },
-      "desc": "Register an escrow address that collects fees for a referrer"
-    },
-    {
-      "name": "claim",
+      "name": "claim_bulk",
       "args": [
         {
           "type": "account",
@@ -35,7 +21,7 @@
       "desc": "Claim the commissions for all assets in the foreign assets array"
     },
     {
-      "name": "referrer_claim",
+      "name": "claim_single",
       "args": [
         {
           "type": "account",
@@ -86,6 +72,39 @@
         "type": "void"
       },
       "desc": "Opt the app into all assets in the foreign assets array."
+    },
+    {
+      "name": "set_escrow_permissions",
+      "args": [
+        {
+          "type": "account",
+          "name": "escrow",
+          "desc": "The escrow that belongs to the referrer (the caller)"
+        },
+        {
+          "type": "uint64",
+          "name": "permission",
+          "desc": "1 if the referrer grants the swapper access to the escrow, 0 otherwise"
+        }
+      ],
+      "returns": {
+        "type": "void"
+      },
+      "desc": "Grant or withdraw permission to let the swapper withdraw from the escrow. This can only be called by the escrow's associated referrer address."
+    },
+    {
+      "name": "set_swapper_address",
+      "args": [
+        {
+          "type": "address",
+          "name": "swapper",
+          "desc": "The escrow that belongs to the referrer (the caller)"
+        }
+      ],
+      "returns": {
+        "type": "void"
+      },
+      "desc": "Set the swapper address that is allowed to withdraw from escrows that gave permission. This can only be called by the creator."
     },
     {
       "name": "get_escrow_by_referrer",

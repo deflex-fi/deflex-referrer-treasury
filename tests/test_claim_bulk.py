@@ -4,7 +4,7 @@ from base_test_case import BaseTestCase
 from app_client import AppClient
 
 
-class TestClaim(BaseTestCase):
+class TestClaimBulk(BaseTestCase):
 
     def setUp(self):
         super().setUp()
@@ -37,7 +37,7 @@ class TestClaim(BaseTestCase):
         self.send_asset(self.creator, self.escrow.address(), asset_id, 5000)
         # claim ALGO
         holdings1 = self.get_asset_holding(self.referrer.pk, asset_id)
-        result = self.app_client.prepare_claim(
+        result = self.app_client.prepare_claim_bulk(
                 self.user,
                 self.app_id,
                 self.referrer.pk,
@@ -56,7 +56,7 @@ class TestClaim(BaseTestCase):
         # claim asset
         self.opt_account_into_asset(self.referrer, asset_id)
         holdings1 = self.get_asset_holding(self.referrer.pk, asset_id)
-        result = self.app_client.prepare_claim(
+        result = self.app_client.prepare_claim_bulk(
                 self.user,
                 self.app_id,
                 self.referrer.pk,
@@ -89,7 +89,7 @@ class TestClaim(BaseTestCase):
         holdings11 = self.get_asset_holding(self.referrer.pk, asset1_id)
         holdings12 = self.get_asset_holding(self.referrer.pk, asset2_id)
         holdings13 = self.get_asset_holding(self.referrer.pk, asset3_id)
-        result = self.app_client.prepare_claim(
+        result = self.app_client.prepare_claim_bulk(
                 self.user,
                 self.app_id,
                 self.referrer.pk,
@@ -114,7 +114,7 @@ class TestClaim(BaseTestCase):
         # claim asset
         self.opt_account_into_asset(self.referrer, asset_id)
         holdings1 = self.get_asset_holding(self.referrer.pk, asset_id)
-        result = self.app_client.prepare_claim(
+        result = self.app_client.prepare_claim_bulk(
                 self.user,
                 self.app_id,
                 self.referrer.pk,
@@ -135,7 +135,7 @@ class TestClaim(BaseTestCase):
         self.opt_account_into_asset(self.user, asset_id)
         with self.assertRaises(Exception):
             referrer_address = self.user.pk
-            self.app_client.prepare_claim(
+            self.app_client.prepare_claim_bulk(
                     self.user,
                     self.app_id,
                     referrer_address,
@@ -159,7 +159,7 @@ class TestClaim(BaseTestCase):
         self.send_asset(self.creator, self.escrow2.address(), asset_id, 5000)
         # now try to claim from second escrow for first referrer
         with self.assertRaises(Exception):
-            self.app_client.prepare_claim(
+            self.app_client.prepare_claim_bulk(
                     self.user,
                     self.app_id,
                     self.referrer.pk,

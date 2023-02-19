@@ -13,8 +13,7 @@ bytes app_address = sha512_256(concat("appID", itob(config.application_id)))
 # Only allow calling the register_escrow method on the correct app
 # with the correct referrer_address
 assert(Txn.ApplicationID == config.application_id)
-assert(Txn.OnCompletion == NoOp)
+assert(Txn.OnCompletion == OptIn)
 assert(Txn.RekeyTo == app_address)
-assert(Txn.ApplicationArgs[0] == method("register_escrow(address)void"))
-assert(Txn.ApplicationArgs[1] == config.referrer_address)
+assert(Txn.ApplicationArgs[0] == config.referrer_address)
 exit(1)

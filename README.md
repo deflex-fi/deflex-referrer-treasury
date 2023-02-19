@@ -7,13 +7,44 @@ referrer address must be opted into many different ASAs to actually earn the
 commission. If the referrer address isn't opted into an asset, it cannot
 receive the commission.
 
-Therefore, we use this app to pool commissions that can later be claimed by the
-referrer. For every referrer, an escrow account is created that's rekeyed to
-this app. If an asset is swapped that this escrow hasn't received before, the
-escrow is automatically opted into it.
+Therefore, we use this app to hold commissions in escrow that can later be
+claimed by the referrer. For every referrer, an individual escrow account is
+created that's rekeyed to this app. If an asset is swapped that this escrow
+hasn't received before, the escrow is automatically opted into it.
 
-The pooled commissions can be claimed and sent to the referrer any time as long
-as the referrer has opted into the necessary assets.
+The commissions can be claimed and sent to the referrer at any time as long as
+the referrer has opted into the necessary assets.
+
+
+## Auto-convert commissions
+
+Accumulating commissions in different assets may be undesirable for some
+clients (a token that's valuable today may be worthless by the time the client
+claims the commissions). Therefore, we offer a system where we convert
+commissions to a pre-defined asset (e.g., ALGO, USDC, etc). This is,
+unfortunately, not possible at the moment in a trustless way. Therefore, this
+system is by default disabled and only if a client approves with a special
+transaction, a dedicated account is given access to a client's escrow. Clients
+can grant and revoke permission at any time.
+
+This privileged swapper account, if granted access, can withdraw assets from an
+escrow account and swap them to a desired output asset. The swapping involves
+off-chain components (computing the swap plan that is then executed with
+Deflex) and is therefore not trustless. Again, this system is only enabled for
+an escrow, if a client explicitly approves it.
+
+
+## State
+
+### Global State
+
+- `swapper_address` (bytes): the address of the privileged account that is
+  allowed to swap assets on an escrow's behalf.
+
+### Local State of Escrow Accounts
+
+- `swapping_allowed` (uint64): 1 if the referrer grants the swapper access to
+  the escrow, 0 otherwise (0 is the default).
 
 
 ## Deterministic Escrow Address
@@ -25,10 +56,11 @@ permits calling the app's `register_escrow` function.
 
 ## Methods
 
-### Registering an escrow account: `register_escrow`
+### Registering an escrow account with OptIn
 
 Registers an escrow account that collects commissions for a referrer. A
-referrer can have only one escrow account.
+referrer can have only one escrow account. This function must be called with
+`OnComplete=OptIn`.
 
 Parameters:
 1. `referrer_address`: the address of the referrer account that is escrow is
@@ -43,7 +75,7 @@ Notes:
 - Once an escrow is rekeyed to a referrer, it cannot be unlinked anymore.
 
 
-### Claiming commissions: `claim`
+### Claiming commissions in bulk: `claim_bulk`
 
 This claims a referrer's commissions from her escrow account and transfers them
 to the referrer account.
@@ -68,12 +100,15 @@ Notes:
   issue the necessary transactions.
 
 
-### Claiming commissions as referrer: `referrer_claim`
+### Claiming commissions as referrer: `claim_single`
 
 This claims a referrer's commissions from her escrow account and transfers them
-to the referrer account. The difference with respect to the previous function
-is that this function can only be called by the referrer account itself and
-that it allows closing out an asset (ALGO cannot be closed out).
+to the referrer account. There are two important differences with respect to
+the previous function:
+
+1. This function can only be called by the referrer account, or if the referrer
+   allowed it, by the privileged swapper account.
+2. This function allows closing out an asset (ALGO cannot be closed out).
 
 Parameters:
 1. `escrow`: the referrer's escrow account that holds the commissions
@@ -114,6 +149,31 @@ Parameters:
 Required network fees: `minfee * (1 + len(foreign_assets))`
 - `1 * minfee` microALGO for the call itself
 - `len(foreign_assets) * minfee` to send the commission to the referrer
+
+
+### Setting an escrow's permissions: `set_escrow_permissions`
+
+Lets a referrer grant or revoke the permission to let the privileged swapper
+account withdraw from their escrow account. This function can only be called by
+the referrer account that owns this escrow account.
+
+Parameters:
+1. `escrow`: the referrer's escrow account
+2. `permission`: 1 if the referrer grants the swapper access to the escrow, 0 otherwise
+
+Required network fees: `1 * minfee`
+
+
+### Setting the privileged swapper account: `set_swapper_address`
+
+Lets the app's creator define a privileged swapper account that is allowed to
+withdraw from accounts for which it was given access to. This function can only
+be called by this app's creator account.
+
+Parameters:
+1. `swapper`: the address of the swapper
+
+Required network fees: `1 * minfee`
 
 
 ### Getting a referrer's escrow address: `get_escrow_by_referrer`

@@ -59,12 +59,12 @@ class AppClient:
 
     def get_global_schema(self):
         global_ints  = 0
-        global_bytes = 0
+        global_bytes = 1
         return StateSchema(global_ints, global_bytes)
 
 
     def get_local_schema(self):
-        local_ints  = 0
+        local_ints  = 1
         local_bytes = 0
         return StateSchema(local_ints, local_bytes)
 
@@ -180,21 +180,20 @@ class AppClient:
             sender=user.pk,
             sp=params,
             receiver=escrow.address(),
-            amt=100_000,
+            amt=228_500,
         ), AccountTransactionSigner(user.sk)))
         composer.txn_list[-1].txn.fee = 2000
         # call app
-        composer.add_method_call(
-            app_id=app_id,
+        composer = composer.add_transaction(TransactionWithSigner(transaction.ApplicationCallTxn(
             sender=escrow.address(),
-            method=self.contract.get_method_by_name('register_escrow'),
             sp=params,
-            method_args=[
-                referrer_address,
+            index=app_id,
+            app_args=[
+                encoding.decode_address(referrer_address),
             ],
             rekey_to=self.app_address(app_id),
-            signer=LogicSigTransactionSigner(escrow),
-        )
+            on_complete=transaction.OnComplete.OptInOC.real,
+        ), LogicSigTransactionSigner(escrow)))
         composer.txn_list[-1].txn.fee = 0
         return composer
 
@@ -232,7 +231,7 @@ class AppClient:
         return composer
 
 
-    def prepare_claim(self,
+    def prepare_claim_bulk(self,
             user: KeyPair,
             app_id: int,
             referrer_address: str,
@@ -244,7 +243,7 @@ class AppClient:
         composer.add_method_call(
             app_id=app_id,
             sender=user.pk,
-            method=self.contract.get_method_by_name('claim'),
+            method=self.contract.get_method_by_name('claim_bulk'),
             sp=params,
             method_args=[
                 referrer_address,
@@ -257,7 +256,7 @@ class AppClient:
         return composer
 
 
-    def prepare_referrer_claim(self,
+    def prepare_claim_single(self,
             user: KeyPair,
             app_id: int,
             escrow_address: str,
@@ -273,7 +272,7 @@ class AppClient:
         composer.add_method_call(
             app_id=app_id,
             sender=user.pk,
-            method=self.contract.get_method_by_name('referrer_claim'),
+            method=self.contract.get_method_by_name('claim_single'),
             sp=params,
             method_args=[
                 escrow_address,
@@ -285,6 +284,48 @@ class AppClient:
             signer=AccountTransactionSigner(user.sk),
         )
         composer.txn_list[-1].txn.fee = 2000
+        return composer
+
+
+    def prepare_set_escrow_permissions(self,
+            user: KeyPair,
+            app_id: int,
+            escrow_address: str,
+            permission: int,
+            composer: Optional[AtomicTransactionComposer] = None,
+            params: Optional[SuggestedParams] = None) -> AtomicTransactionComposer:
+        composer, params = self._get_defaults(composer, params)
+        composer.add_method_call(
+            app_id=app_id,
+            sender=user.pk,
+            method=self.contract.get_method_by_name('set_escrow_permissions'),
+            sp=params,
+            method_args=[
+                escrow_address,
+                permission,
+            ],
+            signer=AccountTransactionSigner(user.sk),
+        )
+        return composer
+
+
+    def prepare_set_swapper_address(self,
+            user: KeyPair,
+            app_id: int,
+            swapper_address: str,
+            composer: Optional[AtomicTransactionComposer] = None,
+            params: Optional[SuggestedParams] = None) -> AtomicTransactionComposer:
+        composer, params = self._get_defaults(composer, params)
+        composer.add_method_call(
+            app_id=app_id,
+            sender=user.pk,
+            method=self.contract.get_method_by_name('set_swapper_address'),
+            sp=params,
+            method_args=[
+                swapper_address,
+            ],
+            signer=AccountTransactionSigner(user.sk),
+        )
         return composer
 
 
