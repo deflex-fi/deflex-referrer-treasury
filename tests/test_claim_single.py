@@ -32,7 +32,6 @@ class TestClaimSingle(BaseTestCase):
 
 
     def test_claim_algo(self):
-        # opt into asset
         asset_id = 0 # ALGO
         self.send_asset(self.creator, self.escrow.address(), asset_id, 5000)
         # claim ALGO

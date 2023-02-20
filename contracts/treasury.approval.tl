@@ -209,7 +209,7 @@ block main:
         # only the creator is allowed to call this function
         assert(Txn.Sender == Global.CreatorAddress)
 
-        bytes swapper_address = Txn.Accounts[1]
+        bytes swapper_address = Txn.ApplicationArgs[1]
         assert(len(swapper_address) == 32)
         app_global_put(VG_SWAPPER_ADDRESS, swapper_address)
 
