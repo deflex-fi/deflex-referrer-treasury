@@ -73,6 +73,7 @@ Notes:
 - This function must be called from the escrow account
 - The escrow account must rekey itself to the app account
 - Once an escrow is rekeyed to a referrer, it cannot be unlinked anymore.
+- The escrow must contain at least 0.2285 ALGO to cover for its MBR
 
 
 ### Claiming commissions in bulk: `claim_bulk`
@@ -193,7 +194,7 @@ Required network fees: `1 * minfee`
 1. Payment _(to increase the minimum balance of the limit-order app)_
    1. Sender: Any Account
    2. Receiver: Escrow account
-   3. Amount: `100_000` (MBR for account)
+   3. Amount: `228_500` (MBR for account)
 2. Application _(to initialize the app)_
    1. ID: Referrer Treasury App
    2. Sender: Escrow account
