@@ -196,10 +196,9 @@ Required network fees: `1 * minfee`
    3. Amount: `100_000` (MBR for account)
 2. Application _(to initialize the app)_
    1. ID: Referrer Treasury App
-   2. Method: `register_escrow`
-   3. Sender: Escrow account
-   4. Args: [Referrer address]
-   5. On Complete: NoOp
+   2. Sender: Escrow account
+   3. Args: [Referrer address]
+   4. On Complete: OptIn
    6. Rekey to: Referrer Treasury App
 
 
