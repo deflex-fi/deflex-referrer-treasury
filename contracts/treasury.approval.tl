@@ -43,8 +43,6 @@ end
 block opt_in:
     # the escrow must be rekeyed to the app
     assert(Txn.RekeyTo == Global.CurrentApplicationAddress)
-    assert(Txn.CloseRemainderTo == Global.ZeroAddress)
-    assert(Txn.AssetCloseTo == Global.ZeroAddress)
 
     # check that the (referrer, escrow) accounts are linked
     bytes escrow_address = Txn.Sender
