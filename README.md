@@ -45,6 +45,17 @@ an escrow, if a client explicitly approves it.
 
 - `swapping_allowed` (uint64): 1 if the referrer grants the swapper access to
   the escrow, 0 otherwise (0 is the default).
+- `target_asset_id` (uint64): The ID of the asset that other assets are swapped
+  to if swapping is enabled
+
+### Local State MBR
+
+Escrow accounts opt into the app and need to contain at least 0.257 ALGO for
+MBR, which is computed as follows:
+- 0.1 ALGO for an account MBR
+- 0.1 ALGO for opting into the app
+- 0.025 + 0.0035 = 0.0285 ALGO for the `swapping_allowed` local state
+- 0.025 + 0.0035 = 0.0285 ALGO for the `target_asset_id` local state
 
 
 ## Deterministic Escrow Address
@@ -73,7 +84,7 @@ Notes:
 - This function must be called from the escrow account
 - The escrow account must rekey itself to the app account
 - Once an escrow is rekeyed to a referrer, it cannot be unlinked anymore.
-- The escrow must contain at least 0.2285 ALGO to cover for its MBR
+- The escrow must contain at least 0.257 ALGO to cover for its MBR.
 
 
 ### Claiming commissions in bulk: `claim_bulk`
@@ -152,15 +163,33 @@ Required network fees: `minfee * (1 + len(foreign_assets))`
 - `len(foreign_assets) * minfee` to send the commission to the referrer
 
 
-### Setting an escrow's permissions: `set_escrow_permissions`
+### Enable swapping: `enable_swapping`
 
-Lets a referrer grant or revoke the permission to let the privileged swapper
-account withdraw from their escrow account. This function can only be called by
-the referrer account that owns this escrow account.
+Grants the permission to let the privileged swapper account withdraw from a
+referrer's escrow account. If granted, the swapper can withdraw any asset but
+the `target_asset` that the referrer specifies in this call. The idea is that
+the swapper swaps assets to the `target_asset` and sends them back to the
+escrow account (and for that the swapper doesn't need to be able to withdraw
+the `target_asset` from the escrow). This function can only be called by the
+referrer account that owns this escrow account.
 
 Parameters:
 1. `escrow`: the referrer's escrow account
-2. `permission`: 1 if the referrer grants the swapper access to the escrow, 0 otherwise
+2. `target_asset`: the ID of the asset (0 for ALGO) that other assets are swapped to
+
+Required network fees: `1 * minfee`
+
+Notes:
+- The escrow account must be opted into the `target_asset`
+
+
+### Disable swapping: `disable_swapping`
+
+Lets a referrer revoke the permission to let the privileged swapper account
+withdraw from their escrow account
+
+Parameters:
+1. `escrow`: the referrer's escrow account
 
 Required network fees: `1 * minfee`
 

@@ -34,6 +34,7 @@ class TestClaimSingleAsSwapper(BaseTestCase):
 
 
     def test_claim_algo_as_swapper(self):
+        target_asset_id = self.create_asset(self.creator)
         # fund the escrow
         asset_id = 0 # ALGO
         self.send_asset(self.creator, self.escrow.address(), asset_id, 5000)
@@ -44,11 +45,12 @@ class TestClaimSingleAsSwapper(BaseTestCase):
                 self.swapper.pk,
         ).execute(self.algod_client, 1000)
         # grant permission to swapper
-        self.app_client.prepare_set_escrow_permissions(
+        self.opt_escrow_into_asset(target_asset_id)
+        self.app_client.prepare_enable_swapping(
                 self.referrer,
                 self.app_id,
                 self.escrow.address(),
-                permission=1,
+                target_asset_id,
         ).execute(self.algod_client, 1000)
         # claim algo as swapper
         holdings1 = self.get_asset_holding(self.beneficiary.pk, asset_id)
@@ -89,6 +91,7 @@ class TestClaimSingleAsSwapper(BaseTestCase):
 
 
     def test_claim_algo_as_swapper_after_revoking_permission_fails(self):
+        target_asset_id = self.create_asset(self.creator)
         # fund the escrow
         asset_id = 0 # ALGO
         self.send_asset(self.creator, self.escrow.address(), asset_id, 5000)
@@ -99,18 +102,18 @@ class TestClaimSingleAsSwapper(BaseTestCase):
                 self.swapper.pk,
         ).execute(self.algod_client, 1000)
         # grant permission to swapper
-        self.app_client.prepare_set_escrow_permissions(
+        self.opt_escrow_into_asset(target_asset_id)
+        self.app_client.prepare_enable_swapping(
                 self.referrer,
                 self.app_id,
                 self.escrow.address(),
-                permission=1,
+                target_asset_id,
         ).execute(self.algod_client, 1000)
         # revoke permission from swapper again
-        self.app_client.prepare_set_escrow_permissions(
+        self.app_client.prepare_disable_swapping(
                 self.referrer,
                 self.app_id,
                 self.escrow.address(),
-                permission=0,
         ).execute(self.algod_client, 1000)
         # claim algo as swapper without being given permission fails
         with self.assertRaises(Exception):
@@ -126,6 +129,7 @@ class TestClaimSingleAsSwapper(BaseTestCase):
 
 
     def test_claim_algo_as_referrer_still_works_after_giving_permission_to_swapper(self):
+        target_asset_id = self.create_asset(self.creator)
         # fund the escrow
         asset_id = 0 # ALGO
         self.send_asset(self.creator, self.escrow.address(), asset_id, 5000)
@@ -136,11 +140,12 @@ class TestClaimSingleAsSwapper(BaseTestCase):
                 self.swapper.pk,
         ).execute(self.algod_client, 1000)
         # grant permission to swapper
-        self.app_client.prepare_set_escrow_permissions(
+        self.opt_escrow_into_asset(target_asset_id)
+        self.app_client.prepare_enable_swapping(
                 self.referrer,
                 self.app_id,
                 self.escrow.address(),
-                permission=1,
+                target_asset_id,
         ).execute(self.algod_client, 1000)
         # claim algo as referrer
         holdings1 = self.get_asset_holding(self.beneficiary.pk, asset_id)
@@ -158,6 +163,7 @@ class TestClaimSingleAsSwapper(BaseTestCase):
 
 
     def test_claim_algo_as_non_swapper_and_non_referrer_fails(self):
+        target_asset_id = self.create_asset(self.creator)
         self.attacker = self.create_account(initial_funding=10_000_000)
         # fund the escrow
         asset_id = 0 # ALGO
@@ -169,11 +175,12 @@ class TestClaimSingleAsSwapper(BaseTestCase):
                 self.swapper.pk,
         ).execute(self.algod_client, 1000)
         # grant permission to swapper
-        self.app_client.prepare_set_escrow_permissions(
+        self.opt_escrow_into_asset(target_asset_id)
+        self.app_client.prepare_enable_swapping(
                 self.referrer,
                 self.app_id,
                 self.escrow.address(),
-                permission=1,
+                target_asset_id,
         ).execute(self.algod_client, 1000)
         # claim algo as attacker fails
         with self.assertRaises(Exception):
@@ -189,17 +196,19 @@ class TestClaimSingleAsSwapper(BaseTestCase):
 
 
     def test_claim_algo_only_last_swapper_can_claim(self):
+        target_asset_id = self.create_asset(self.creator)
         self.swapper1 = self.create_account(initial_funding=10_000_000)
         self.swapper2 = self.create_account(initial_funding=10_000_000)
         # fund the escrow
         asset_id = 0 # ALGO
         self.send_asset(self.creator, self.escrow.address(), asset_id, 5000)
         # grant permission to swapper
-        self.app_client.prepare_set_escrow_permissions(
+        self.opt_escrow_into_asset(target_asset_id)
+        self.app_client.prepare_enable_swapping(
                 self.referrer,
                 self.app_id,
                 self.escrow.address(),
-                permission=1,
+                target_asset_id,
         ).execute(self.algod_client, 1000)
         # configure the swapper
         self.app_client.prepare_set_swapper_address(
@@ -250,6 +259,69 @@ class TestClaimSingleAsSwapper(BaseTestCase):
                     beneficiary_address=self.beneficiary.pk,
             ).execute(self.algod_client, 1000)
 
+
+    def test_swapper_cannot_claim_target_asset(self):
+        target_asset_id = 0
+        # fund the escrow
+        asset_id = 0 # ALGO
+        self.send_asset(self.creator, self.escrow.address(), asset_id, 5000)
+        # configure the swapper
+        self.app_client.prepare_set_swapper_address(
+                self.creator,
+                self.app_id,
+                self.swapper.pk,
+        ).execute(self.algod_client, 1000)
+        # grant permission to swapper
+        self.opt_escrow_into_asset(target_asset_id)
+        self.app_client.prepare_enable_swapping(
+                self.referrer,
+                self.app_id,
+                self.escrow.address(),
+                target_asset_id,
+        ).execute(self.algod_client, 1000)
+        # claim algo as swapper
+        with self.assertRaises(Exception):
+            self.app_client.prepare_claim_single(
+                    self.swapper,
+                    self.app_id,
+                    self.escrow.address(),
+                    asset_id,
+                    5000,
+                    close_out=0,
+                    beneficiary_address=self.beneficiary.pk,
+            ).execute(self.algod_client, 1000)
+
+
+    def test_swapper_cannot_claim_target_asa(self):
+        target_asset_id = self.create_asset(self.creator)
+        # fund the escrow
+        asset_id = target_asset_id
+        self.opt_escrow_into_asset(target_asset_id)
+        self.send_asset(self.creator, self.escrow.address(), asset_id, 5000)
+        # configure the swapper
+        self.app_client.prepare_set_swapper_address(
+                self.creator,
+                self.app_id,
+                self.swapper.pk,
+        ).execute(self.algod_client, 1000)
+        # grant permission to swapper
+        self.app_client.prepare_enable_swapping(
+                self.referrer,
+                self.app_id,
+                self.escrow.address(),
+                target_asset_id,
+        ).execute(self.algod_client, 1000)
+        # claim algo as swapper
+        with self.assertRaises(Exception):
+            self.app_client.prepare_claim_single(
+                    self.swapper,
+                    self.app_id,
+                    self.escrow.address(),
+                    asset_id,
+                    5000,
+                    close_out=0,
+                    beneficiary_address=self.beneficiary.pk,
+            ).execute(self.algod_client, 1000)
 
 if __name__ == "__main__":
     unittest.main()

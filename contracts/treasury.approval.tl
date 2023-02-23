@@ -8,6 +8,7 @@ const bytes ESCROW_TEMPLATE = "\x08\x80\x28\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\
 # - local state keys are prefixed by VL (variable in local state)
 const bytes VG_SWAPPER_ADDRESS = "swapper_address"
 const bytes VL_SWAPPING_ALLOWED = "swapping_allowed"
+const bytes VL_TARGET_ASSET_ID = "target_asset_id"
 
 const int SWAPPING_DISALLOWED = 0
 const int SWAPPING_ALLOWED = 1
@@ -60,7 +61,8 @@ block main:
         method("claim_bulk(account,account)void"): claim_bulk
         method("claim_single(account,account,asset,uint64,uint64)uint64"): claim_single
         method("opt_escrow_into_assets(pay,account)void"): opt_escrow_into_assets
-        method("set_escrow_permissions(account,uint64)void"): set_escrow_permissions
+        method("enable_swapping(account,asset)void"): enable_swapping
+        method("disable_swapping(account)void"): disable_swapping
         method("set_swapper_address(address)void"): set_swapper_address
         method("get_escrow_by_referrer(address)address"): get_escrow_by_referrer
     end
@@ -92,6 +94,14 @@ block main:
         int escrow_idx = btoi(Txn.ApplicationArgs[1])
         bytes escrow_address = Txn.Accounts[escrow_idx]
 
+        int asset_idx = btoi(Txn.ApplicationArgs[3])
+        int asset_id = Txn.Assets[asset_idx]
+
+        int beneficiary_idx = btoi(Txn.ApplicationArgs[2])
+        bytes beneficiary_address = Txn.Accounts[beneficiary_idx]
+
+        int amount = btoi(Txn.ApplicationArgs[4])
+
         # this function can be called by one or two entities:
         # 1. the referrer is always allowed to call this function.
         # 2. if the referrer granted access to the swapper_address, the
@@ -101,15 +111,10 @@ block main:
             assert(swapper_address != Global.ZeroAddress)
             int swapping_allowed = app_local_get(escrow_address, VL_SWAPPING_ALLOWED)
             assert(swapping_allowed && (Txn.Sender == swapper_address))
+            # the swapper is not allowed to take the referrer's target asset
+            int target_asset_id = app_local_get(escrow_address, VL_TARGET_ASSET_ID)
+            assert(asset_id != target_asset_id)
         end
-
-        int beneficiary_idx = btoi(Txn.ApplicationArgs[2])
-        bytes beneficiary_address = Txn.Accounts[beneficiary_idx]
-
-        int asset_idx = btoi(Txn.ApplicationArgs[3])
-        int asset_id = Txn.Assets[asset_idx]
-
-        int amount = btoi(Txn.ApplicationArgs[4])
 
         # the caller specifies 1 to close the asset to the beneficiary (thus
         # freeing up the MBR), and 0 otherwise
@@ -187,7 +192,32 @@ block main:
     end
 
 
-    block set_escrow_permissions:
+    block enable_swapping:
+        int escrow_idx = btoi(Txn.ApplicationArgs[1])
+        bytes escrow_address = Txn.Accounts[escrow_idx]
+
+        int asset_idx = btoi(Txn.ApplicationArgs[2])
+        int asset_id = Txn.Assets[asset_idx]
+
+        # only the referrer is allowed to set their escrow's permissions
+        bytes referrer_address = Txn.Sender
+        assert(is_authoritative_account(referrer_address, escrow_address))
+
+        # the escrow must be opted into the output asset
+        if asset_id != ALGO_ID:
+            int is_opted_in
+            is_opted_in, _ = asset_holding_get(AssetBalance, escrow_idx, asset_id)
+            assert(is_opted_in)
+        end
+
+        app_local_put(escrow_address, VL_SWAPPING_ALLOWED, SWAPPING_ALLOWED)
+        app_local_put(escrow_address, VL_TARGET_ASSET_ID, asset_id)
+
+        exit(1)
+    end
+
+
+    block disable_swapping:
         int escrow_idx = btoi(Txn.ApplicationArgs[1])
         bytes escrow_address = Txn.Accounts[escrow_idx]
 
@@ -195,9 +225,8 @@ block main:
         bytes referrer_address = Txn.Sender
         assert(is_authoritative_account(referrer_address, escrow_address))
 
-        int permission = btoi(Txn.ApplicationArgs[2])
-        assert((permission == SWAPPING_ALLOWED) || (permission == SWAPPING_DISALLOWED))
-        app_local_put(escrow_address, VL_SWAPPING_ALLOWED, permission)
+        app_local_put(escrow_address, VL_SWAPPING_ALLOWED, SWAPPING_DISALLOWED)
+        app_local_put(escrow_address, VL_TARGET_ASSET_ID, ALGO_ID)
 
         exit(1)
     end

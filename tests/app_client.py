@@ -64,7 +64,7 @@ class AppClient:
 
 
     def get_local_schema(self):
-        local_ints  = 1
+        local_ints  = 2
         local_bytes = 0
         return StateSchema(local_ints, local_bytes)
 
@@ -180,7 +180,7 @@ class AppClient:
             sender=user.pk,
             sp=params,
             receiver=escrow.address(),
-            amt=228_500,
+            amt=257_000,
         ), AccountTransactionSigner(user.sk)))
         composer.txn_list[-1].txn.fee = 2000
         # call app
@@ -287,22 +287,42 @@ class AppClient:
         return composer
 
 
-    def prepare_set_escrow_permissions(self,
+    def prepare_enable_swapping(self,
             user: KeyPair,
             app_id: int,
             escrow_address: str,
-            permission: int,
+            target_asset_id: int,
             composer: Optional[AtomicTransactionComposer] = None,
             params: Optional[SuggestedParams] = None) -> AtomicTransactionComposer:
         composer, params = self._get_defaults(composer, params)
         composer.add_method_call(
             app_id=app_id,
             sender=user.pk,
-            method=self.contract.get_method_by_name('set_escrow_permissions'),
+            method=self.contract.get_method_by_name('enable_swapping'),
             sp=params,
             method_args=[
                 escrow_address,
-                permission,
+                target_asset_id,
+            ],
+            signer=AccountTransactionSigner(user.sk),
+        )
+        return composer
+
+
+    def prepare_disable_swapping(self,
+            user: KeyPair,
+            app_id: int,
+            escrow_address: str,
+            composer: Optional[AtomicTransactionComposer] = None,
+            params: Optional[SuggestedParams] = None) -> AtomicTransactionComposer:
+        composer, params = self._get_defaults(composer, params)
+        composer.add_method_call(
+            app_id=app_id,
+            sender=user.pk,
+            method=self.contract.get_method_by_name('disable_swapping'),
+            sp=params,
+            method_args=[
+                escrow_address,
             ],
             signer=AccountTransactionSigner(user.sk),
         )

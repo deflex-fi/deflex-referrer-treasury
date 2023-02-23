@@ -74,7 +74,7 @@
       "desc": "Opt the app into all assets in the foreign assets array."
     },
     {
-      "name": "set_escrow_permissions",
+      "name": "enable_swapping",
       "args": [
         {
           "type": "account",
@@ -82,15 +82,29 @@
           "desc": "The escrow that belongs to the referrer (the caller)"
         },
         {
-          "type": "uint64",
-          "name": "permission",
-          "desc": "1 if the referrer grants the swapper access to the escrow, 0 otherwise"
+          "type": "asset",
+          "name": "target_asset",
+          "desc": "The desired asset that other assets are swapped to"
         }
       ],
       "returns": {
         "type": "void"
       },
-      "desc": "Grant or withdraw permission to let the swapper withdraw from the escrow. This can only be called by the escrow's associated referrer address."
+      "desc": "Grant permission to let the swapper withdraw assets from the escrow that are different from the target_asset. This can only be called by the escrow's associated referrer address."
+    },
+    {
+      "name": "disable_swapping",
+      "args": [
+        {
+          "type": "account",
+          "name": "escrow",
+          "desc": "The escrow that belongs to the referrer (the caller)"
+        }
+      ],
+      "returns": {
+        "type": "void"
+      },
+      "desc": "Revokes permission to let the swapper withdraw from the escrow. This can only be called by the escrow's associated referrer address."
     },
     {
       "name": "set_swapper_address",
