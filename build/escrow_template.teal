@@ -1,0 +1,47 @@
+#pragma version 8
+
+
+// Configuration config = "\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF" [slot 0]
+pushbytes "\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+store 0 // config
+
+// compute the address of the provided app
+// bytes app_address = sha512_256(concat("appID", itob(config.application_id))) [slot 1]
+pushbytes "appID"
+load 0 // config
+pushint 32
+extract_uint64 // application_id
+itob
+concat
+sha512_256
+store 1 // app_address
+
+// Only allow calling the register_escrow method on the correct app
+// with the correct referrer_address
+// assert(Txn.ApplicationID == config.application_id)
+txn ApplicationID
+load 0 // config
+pushint 32
+extract_uint64 // application_id
+==
+assert
+// assert(Txn.OnCompletion == OptIn)
+txn OnCompletion
+pushint 1 // OptIn
+==
+assert
+// assert(Txn.RekeyTo == app_address)
+txn RekeyTo
+load 1 // app_address
+==
+assert
+// assert(Txn.ApplicationArgs[0] == config.referrer_address)
+txna ApplicationArgs 0
+load 0 // config
+extract 0 32 // referrer_address
+==
+assert
+// exit(1)
+pushint 1
+return
+

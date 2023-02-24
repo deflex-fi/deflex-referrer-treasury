@@ -1,0 +1,832 @@
+#pragma version 8
+
+
+// global and local state keys
+// - global state keys are prefixed by VG (variable in global state)
+// - local state keys are prefixed by VL (variable in local state)
+
+
+// if Txn.ApplicationID == 0:
+  txn ApplicationID
+  pushint 0
+  ==
+  bz l0_end
+  // then:
+    // app_global_put(VG_SWAPPER_ADDRESS, Global.ZeroAddress)
+    pushbytes "swapper_address" // VG_SWAPPER_ADDRESS
+    global ZeroAddress
+    app_global_put
+    // exit(1)
+    pushint 1
+    return
+  l0_end: // end
+
+// switch Txn.OnCompletion:
+txn OnCompletion
+pushint 0 // NoOp
+==
+bnz main
+txn OnCompletion
+pushint 1 // OptIn
+==
+bnz opt_in
+txn OnCompletion
+pushint 2 // CloseOut
+==
+bnz close_out
+txn OnCompletion
+pushint 4 // UpdateApplication
+==
+bnz update_app
+txn OnCompletion
+pushint 5 // DeleteApplication
+==
+bnz delete_app
+err // unexpected value
+
+// block close_out
+close_out:
+  // Disallow Closing Out
+  // exit(0)
+  pushint 0
+  return
+
+// block update_app
+update_app:
+  // Disallow upating the app
+  // exit(0)
+  pushint 0
+  return
+
+// block delete_app
+delete_app:
+  // Disallow deleting the app
+  // exit(0)
+  pushint 0
+  return
+
+// block opt_in
+opt_in:
+  // the escrow must be rekeyed to the app
+  // assert(Txn.RekeyTo == Global.CurrentApplicationAddress)
+  txn RekeyTo
+  global CurrentApplicationAddress
+  ==
+  assert
+  
+  // check that the (referrer, escrow) accounts are linked
+  // bytes escrow_address = Txn.Sender [slot 0]
+  txn Sender
+  store 0 // escrow_address
+  // bytes referrer_address = Txn.ApplicationArgs[0] [slot 1]
+  txna ApplicationArgs 0
+  store 1 // referrer_address
+  // assert(is_authoritative_account(referrer_address, escrow_address))
+  load 1 // referrer_address
+  load 0 // escrow_address
+  callsub __func__is_authoritative_account
+  assert
+  
+  // disallow swapping for this escrow account by default
+  // app_local_put(escrow_address, VL_SWAPPING_ALLOWED, SWAPPING_DISALLOWED)
+  load 0 // escrow_address
+  pushbytes "swapping_allowed" // VL_SWAPPING_ALLOWED
+  pushint 0 // SWAPPING_DISALLOWED
+  app_local_put
+  
+  // exit(1)
+  pushint 1
+  return
+
+// block main
+main:
+  // switch Txn.ApplicationArgs[0]:
+  txna ApplicationArgs 0
+  method "claim_bulk(account,account)void"
+  ==
+  bnz main__claim_bulk
+  txna ApplicationArgs 0
+  method "claim_single(account,account,asset,uint64,uint64)uint64"
+  ==
+  bnz main__claim_single
+  txna ApplicationArgs 0
+  method "opt_escrow_into_assets(pay,account)void"
+  ==
+  bnz main__opt_escrow_into_assets
+  txna ApplicationArgs 0
+  method "enable_swapping(account,asset)void"
+  ==
+  bnz main__enable_swapping
+  txna ApplicationArgs 0
+  method "disable_swapping(account)void"
+  ==
+  bnz main__disable_swapping
+  txna ApplicationArgs 0
+  method "set_swapper_address(address)void"
+  ==
+  bnz main__set_swapper_address
+  txna ApplicationArgs 0
+  method "get_escrow_by_referrer(address)address"
+  ==
+  bnz main__get_escrow_by_referrer
+  err // unexpected value
+  
+  
+  // block claim_bulk
+  main__claim_bulk:
+    // int referrer_idx = btoi(Txn.ApplicationArgs[1]) [slot 0]
+    txna ApplicationArgs 1
+    btoi
+    store 0 // referrer_idx
+    // bytes referrer_address = Txn.Accounts[referrer_idx] [slot 1]
+    load 0 // referrer_idx
+    txnas Accounts
+    store 1 // referrer_address
+    
+    // int escrow_idx = btoi(Txn.ApplicationArgs[2]) [slot 2]
+    txna ApplicationArgs 2
+    btoi
+    store 2 // escrow_idx
+    // bytes escrow_address = Txn.Accounts[escrow_idx] [slot 3]
+    load 2 // escrow_idx
+    txnas Accounts
+    store 3 // escrow_address
+    
+    // check that the (referrer, escrow) accounts are linked
+    // assert(is_authoritative_account(referrer_address, escrow_address))
+    load 1 // referrer_address
+    load 3 // escrow_address
+    callsub __func__is_authoritative_account
+    assert
+    
+    // int nr_assets = Txn.NumAssets [slot 4]
+    txn NumAssets
+    store 4 // nr_assets
+    // for i in 0:nr_assets:
+      pushint 0
+      store 5 // i
+      l1_for:
+      load 5 // i
+      load 4 // nr_assets
+      ==
+      bnz l1_end
+      // int asset_id = Txn.Assets[i] [slot 6]
+      load 5 // i
+      txnas Assets
+      store 6 // asset_id
+      // int amount = get_balance(escrow_idx, asset_id) [slot 7]
+      load 2 // escrow_idx
+      load 6 // asset_id
+      callsub __func__get_balance
+      store 7 // amount
+      // bytes note = "deflex:udeflex_commission" [slot 8]
+      pushbytes "deflex:udeflex_commission"
+      store 8 // note
+      // transfer(asset_id, amount, escrow_address, referrer_address, note)
+      load 6 // asset_id
+      load 7 // amount
+      load 3 // escrow_address
+      load 1 // referrer_address
+      load 8 // note
+      callsub __func__transfer
+      load 5 // i
+      pushint 1
+      +
+      store 5 // i
+      b l1_for
+      l1_end: // end
+    
+    // exit(1)
+    pushint 1
+    return
+  
+  
+  // block claim_single
+  main__claim_single:
+    // int escrow_idx = btoi(Txn.ApplicationArgs[1]) [slot 0]
+    txna ApplicationArgs 1
+    btoi
+    store 0 // escrow_idx
+    // bytes escrow_address = Txn.Accounts[escrow_idx] [slot 1]
+    load 0 // escrow_idx
+    txnas Accounts
+    store 1 // escrow_address
+    
+    // int asset_idx = btoi(Txn.ApplicationArgs[3]) [slot 2]
+    txna ApplicationArgs 3
+    btoi
+    store 2 // asset_idx
+    // int asset_id = Txn.Assets[asset_idx] [slot 3]
+    load 2 // asset_idx
+    txnas Assets
+    store 3 // asset_id
+    
+    // int beneficiary_idx = btoi(Txn.ApplicationArgs[2]) [slot 4]
+    txna ApplicationArgs 2
+    btoi
+    store 4 // beneficiary_idx
+    // bytes beneficiary_address = Txn.Accounts[beneficiary_idx] [slot 5]
+    load 4 // beneficiary_idx
+    txnas Accounts
+    store 5 // beneficiary_address
+    
+    // int amount = btoi(Txn.ApplicationArgs[4]) [slot 6]
+    txna ApplicationArgs 4
+    btoi
+    store 6 // amount
+    
+    // this function can be called by one or two entities:
+    // 1. the referrer is always allowed to call this function.
+    // 2. if the referrer granted access to the swapper_address, the
+    //    swapper_address is allowed to withdraw from the escrow
+    // if !is_authoritative_account(Txn.Sender, escrow_address):
+      txn Sender
+      load 1 // escrow_address
+      callsub __func__is_authoritative_account
+      !
+      bz l2_end
+      // then:
+        // bytes swapper_address = app_global_get(VG_SWAPPER_ADDRESS) [slot 7]
+        pushbytes "swapper_address" // VG_SWAPPER_ADDRESS
+        app_global_get
+        store 7 // swapper_address
+        // assert(swapper_address != Global.ZeroAddress)
+        load 7 // swapper_address
+        global ZeroAddress
+        !=
+        assert
+        // int swapping_allowed = app_local_get(escrow_address, VL_SWAPPING_ALLOWED) [slot 8]
+        load 1 // escrow_address
+        pushbytes "swapping_allowed" // VL_SWAPPING_ALLOWED
+        app_local_get
+        store 8 // swapping_allowed
+        // assert(swapping_allowed && (Txn.Sender == swapper_address))
+        load 8 // swapping_allowed
+        txn Sender
+        load 7 // swapper_address
+        ==
+        &&
+        assert
+        // the swapper is not allowed to take the referrer's target asset
+        // int target_asset_id = app_local_get(escrow_address, VL_TARGET_ASSET_ID) [slot 9]
+        load 1 // escrow_address
+        pushbytes "target_asset_id" // VL_TARGET_ASSET_ID
+        app_local_get
+        store 9 // target_asset_id
+        // assert(asset_id != target_asset_id)
+        load 3 // asset_id
+        load 9 // target_asset_id
+        !=
+        assert
+      l2_end: // end
+    
+    // the caller specifies 1 to close the asset to the beneficiary (thus
+    // freeing up the MBR), and 0 otherwise
+    // int close_out = btoi(Txn.ApplicationArgs[5]) [slot 10]
+    txna ApplicationArgs 5
+    btoi
+    store 10 // close_out
+    // assert((close_out == 0) || (close_out == 1))
+    load 10 // close_out
+    pushint 0
+    ==
+    load 10 // close_out
+    pushint 1
+    ==
+    ||
+    assert
+    
+    // the escrow account's balance for the given asset
+    // int balance = get_balance(escrow_idx, asset_id) [slot 11]
+    load 0 // escrow_idx
+    load 3 // asset_id
+    callsub __func__get_balance
+    store 11 // balance
+    
+    // to claim the whole balance of the provided asset, the referrer passes amount=0
+    // if amount == 0:
+      load 6 // amount
+      pushint 0
+      ==
+      bz l3_end
+      // then:
+        // amount = balance
+        load 11 // balance
+        store 6 // amount
+      l3_end: // end
+    
+    // bytes note = "deflex:udeflex_commission" [slot 12]
+    pushbytes "deflex:udeflex_commission"
+    store 12 // note
+    // if close_out == 0:
+      load 10 // close_out
+      pushint 0
+      ==
+      bz l4_else
+      // then:
+        // transfer(asset_id, amount, escrow_address, beneficiary_address, note)
+        load 3 // asset_id
+        load 6 // amount
+        load 1 // escrow_address
+        load 5 // beneficiary_address
+        load 12 // note
+        callsub __func__transfer
+      b l4_end
+      l4_else:
+      // else:
+        // we only allow closing out assets, the escrow account cannot be closed
+        // assert(asset_id != ALGO_ID)
+        load 3 // asset_id
+        pushint 0 // ALGO_ID
+        !=
+        assert
+        // we set the amount to the asset's balance as we cannot close out an
+        // asset only partially
+        // amount = balance
+        load 11 // balance
+        store 6 // amount
+        // inner_txn:
+        itxn_begin
+          // TypeEnum: Axfer
+          pushint 4 // Axfer
+          itxn_field TypeEnum
+          // Sender: escrow_address
+          load 1 // escrow_address
+          itxn_field Sender
+          // AssetReceiver: beneficiary_address
+          load 5 // beneficiary_address
+          itxn_field AssetReceiver
+          // AssetAmount: balance
+          load 11 // balance
+          itxn_field AssetAmount
+          // XferAsset: asset_id
+          load 3 // asset_id
+          itxn_field XferAsset
+          // AssetCloseTo: beneficiary_address
+          load 5 // beneficiary_address
+          itxn_field AssetCloseTo
+          // Fee: 0
+          pushint 0
+          itxn_field Fee
+          // Note: note
+          load 12 // note
+          itxn_field Note
+        itxn_submit
+        // end inner_txn
+      l4_end: // end
+    
+    // abi_return(itob(amount))
+    load 6 // amount
+    itob
+    callsub __func__abi_return
+    // exit(1)
+    pushint 1
+    return
+  
+  
+  // block opt_escrow_into_assets
+  main__opt_escrow_into_assets:
+    // int escrow_idx = btoi(Txn.ApplicationArgs[1]) [slot 0]
+    txna ApplicationArgs 1
+    btoi
+    store 0 // escrow_idx
+    // bytes escrow_address = Txn.Accounts[escrow_idx] [slot 1]
+    load 0 // escrow_idx
+    txnas Accounts
+    store 1 // escrow_address
+    
+    // the number of assets that the user wants to opt into
+    // int nr_assets = Txn.NumAssets [slot 2]
+    txn NumAssets
+    store 2 // nr_assets
+    
+    // check that the previous txn funds the MBR increase
+    // int input_txn_index = Txn.GroupIndex - 1 [slot 3]
+    txn GroupIndex
+    pushint 1
+    -
+    store 3 // input_txn_index
+    // assert(Gtxn[input_txn_index].TypeEnum == Pay)
+    load 3 // input_txn_index
+    gtxns TypeEnum
+    pushint 1 // Pay
+    ==
+    assert
+    // assert(Gtxn[input_txn_index].Receiver == escrow_address)
+    load 3 // input_txn_index
+    gtxns Receiver
+    load 1 // escrow_address
+    ==
+    assert
+    // assert(Gtxn[input_txn_index].Amount == (100_000 * nr_assets))
+    load 3 // input_txn_index
+    gtxns Amount
+    pushint 100000
+    load 2 // nr_assets
+    *
+    ==
+    assert
+    // assert(Gtxn[input_txn_index].RekeyTo == Global.ZeroAddress)
+    load 3 // input_txn_index
+    gtxns RekeyTo
+    global ZeroAddress
+    ==
+    assert
+    // assert(Gtxn[input_txn_index].CloseRemainderTo == Global.ZeroAddress)
+    load 3 // input_txn_index
+    gtxns CloseRemainderTo
+    global ZeroAddress
+    ==
+    assert
+    // assert(Gtxn[input_txn_index].AssetCloseTo == Global.ZeroAddress)
+    load 3 // input_txn_index
+    gtxns AssetCloseTo
+    global ZeroAddress
+    ==
+    assert
+    
+    // int skipped_assets = 0 [slot 4]
+    pushint 0
+    store 4 // skipped_assets
+    // for i in 0:nr_assets:
+      pushint 0
+      store 5 // i
+      l5_for:
+      load 5 // i
+      load 2 // nr_assets
+      ==
+      bnz l5_end
+      // int is_opted_in [slot 6]
+      // is_opted_in, _ = asset_holding_get(AssetBalance, escrow_idx, Txn.Assets[i])
+      load 0 // escrow_idx
+      load 5 // i
+      txnas Assets
+      asset_holding_get AssetBalance
+      store 6 // is_opted_in
+      pop // discarding value for _
+      // if !is_opted_in && (Txn.Assets[i] != ALGO_ID):
+        load 6 // is_opted_in
+        !
+        load 5 // i
+        txnas Assets
+        pushint 0 // ALGO_ID
+        !=
+        &&
+        bz l6_else
+        // then:
+          // transfer(Txn.Assets[i], 0, escrow_address, escrow_address, "")
+          load 5 // i
+          txnas Assets
+          pushint 0
+          load 1 // escrow_address
+          load 1 // escrow_address
+          pushbytes ""
+          callsub __func__transfer
+        b l6_end
+        l6_else:
+        // else:
+          // skipped_assets = skipped_assets + 1
+          load 4 // skipped_assets
+          pushint 1
+          +
+          store 4 // skipped_assets
+        l6_end: // end
+      load 5 // i
+      pushint 1
+      +
+      store 5 // i
+      b l5_for
+      l5_end: // end
+    
+    // send back the MBR increase for assets that were not opted in
+    // if skipped_assets > 0:
+      load 4 // skipped_assets
+      pushint 0
+      >
+      bz l7_end
+      // then:
+        // int amount = 100_000 * skipped_assets [slot 5]
+        pushint 100000
+        load 4 // skipped_assets
+        *
+        store 5 // amount
+        // transfer(ALGO_ID, amount, escrow_address, Txn.Sender, "")
+        pushint 0 // ALGO_ID
+        load 5 // amount
+        load 1 // escrow_address
+        txn Sender
+        pushbytes ""
+        callsub __func__transfer
+      l7_end: // end
+    
+    // exit(1)
+    pushint 1
+    return
+  
+  
+  // block enable_swapping
+  main__enable_swapping:
+    // int escrow_idx = btoi(Txn.ApplicationArgs[1]) [slot 0]
+    txna ApplicationArgs 1
+    btoi
+    store 0 // escrow_idx
+    // bytes escrow_address = Txn.Accounts[escrow_idx] [slot 1]
+    load 0 // escrow_idx
+    txnas Accounts
+    store 1 // escrow_address
+    
+    // int asset_idx = btoi(Txn.ApplicationArgs[2]) [slot 2]
+    txna ApplicationArgs 2
+    btoi
+    store 2 // asset_idx
+    // int asset_id = Txn.Assets[asset_idx] [slot 3]
+    load 2 // asset_idx
+    txnas Assets
+    store 3 // asset_id
+    
+    // only the referrer is allowed to set their escrow's permissions
+    // bytes referrer_address = Txn.Sender [slot 4]
+    txn Sender
+    store 4 // referrer_address
+    // assert(is_authoritative_account(referrer_address, escrow_address))
+    load 4 // referrer_address
+    load 1 // escrow_address
+    callsub __func__is_authoritative_account
+    assert
+    
+    // the escrow must be opted into the output asset
+    // if asset_id != ALGO_ID:
+      load 3 // asset_id
+      pushint 0 // ALGO_ID
+      !=
+      bz l8_end
+      // then:
+        // int is_opted_in [slot 5]
+        // is_opted_in, _ = asset_holding_get(AssetBalance, escrow_idx, asset_id)
+        load 0 // escrow_idx
+        load 3 // asset_id
+        asset_holding_get AssetBalance
+        store 5 // is_opted_in
+        pop // discarding value for _
+        // assert(is_opted_in)
+        load 5 // is_opted_in
+        assert
+      l8_end: // end
+    
+    // app_local_put(escrow_address, VL_SWAPPING_ALLOWED, SWAPPING_ALLOWED)
+    load 1 // escrow_address
+    pushbytes "swapping_allowed" // VL_SWAPPING_ALLOWED
+    pushint 1 // SWAPPING_ALLOWED
+    app_local_put
+    // app_local_put(escrow_address, VL_TARGET_ASSET_ID, asset_id)
+    load 1 // escrow_address
+    pushbytes "target_asset_id" // VL_TARGET_ASSET_ID
+    load 3 // asset_id
+    app_local_put
+    
+    // exit(1)
+    pushint 1
+    return
+  
+  
+  // block disable_swapping
+  main__disable_swapping:
+    // int escrow_idx = btoi(Txn.ApplicationArgs[1]) [slot 0]
+    txna ApplicationArgs 1
+    btoi
+    store 0 // escrow_idx
+    // bytes escrow_address = Txn.Accounts[escrow_idx] [slot 1]
+    load 0 // escrow_idx
+    txnas Accounts
+    store 1 // escrow_address
+    
+    // only the referrer is allowed to set their escrow's permissions
+    // bytes referrer_address = Txn.Sender [slot 2]
+    txn Sender
+    store 2 // referrer_address
+    // assert(is_authoritative_account(referrer_address, escrow_address))
+    load 2 // referrer_address
+    load 1 // escrow_address
+    callsub __func__is_authoritative_account
+    assert
+    
+    // app_local_put(escrow_address, VL_SWAPPING_ALLOWED, SWAPPING_DISALLOWED)
+    load 1 // escrow_address
+    pushbytes "swapping_allowed" // VL_SWAPPING_ALLOWED
+    pushint 0 // SWAPPING_DISALLOWED
+    app_local_put
+    // app_local_put(escrow_address, VL_TARGET_ASSET_ID, ALGO_ID)
+    load 1 // escrow_address
+    pushbytes "target_asset_id" // VL_TARGET_ASSET_ID
+    pushint 0 // ALGO_ID
+    app_local_put
+    
+    // exit(1)
+    pushint 1
+    return
+  
+  
+  // block set_swapper_address
+  main__set_swapper_address:
+    // only the creator is allowed to call this function
+    // assert(Txn.Sender == Global.CreatorAddress)
+    txn Sender
+    global CreatorAddress
+    ==
+    assert
+    
+    // bytes swapper_address = Txn.ApplicationArgs[1] [slot 0]
+    txna ApplicationArgs 1
+    store 0 // swapper_address
+    // assert(len(swapper_address) == 32)
+    load 0 // swapper_address
+    len
+    pushint 32
+    ==
+    assert
+    // app_global_put(VG_SWAPPER_ADDRESS, swapper_address)
+    pushbytes "swapper_address" // VG_SWAPPER_ADDRESS
+    load 0 // swapper_address
+    app_global_put
+    
+    // exit(1)
+    pushint 1
+    return
+  
+  
+  // block get_escrow_by_referrer
+  main__get_escrow_by_referrer:
+    // bytes referrer_address = Txn.ApplicationArgs[1] [slot 0]
+    txna ApplicationArgs 1
+    store 0 // referrer_address
+    // abi_return(get_escrow_address(referrer_address))
+    load 0 // referrer_address
+    callsub __func__get_escrow_address
+    callsub __func__abi_return
+    // exit(1)
+    pushint 1
+    return
+
+
+// func is_authoritative_account(referrer_address: bytes, escrow_address: bytes) int:
+__func__is_authoritative_account:
+store 13 // escrow_address
+store 14 // referrer_address
+// bytes derived_escrow_address = get_escrow_address(referrer_address) [slot 15]
+load 14 // referrer_address
+callsub __func__get_escrow_address
+store 15 // derived_escrow_address
+// return escrow_address == derived_escrow_address
+load 13 // escrow_address
+load 15 // derived_escrow_address
+==
+retsub
+
+
+// func get_escrow_address(referrer_address: bytes) bytes:
+__func__get_escrow_address:
+store 16 // referrer_address
+// assert(len(referrer_address) == 32)
+load 16 // referrer_address
+len
+pushint 32
+==
+assert
+// bytes program = ESCROW_TEMPLATE [slot 17]
+pushbytes "\x08\x80\x28\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xff\xff\xff\xff\xff\xff\xff\xff\x35\x00\x80\x05\x61\x70\x70\x49\x44\x34\x00\x81\x20\x5b\x16\x50\x03\x35\x01\x31\x18\x34\x00\x81\x20\x5b\x12\x44\x31\x19\x81\x01\x12\x44\x31\x20\x34\x01\x12\x44\x36\x1a\x00\x34\x00\x57\x00\x20\x12\x44\x81\x01\x43" // ESCROW_TEMPLATE
+store 17 // program
+// program = replace2( 3, program, referrer_address)
+load 17 // program
+load 16 // referrer_address
+replace2 3
+store 17 // program
+// program = replace2(35, program, itob(Global.CurrentApplicationID))
+load 17 // program
+global CurrentApplicationID
+itob
+replace2 35
+store 17 // program
+// return sha512_256(concat("Program", program))
+pushbytes "Program"
+load 17 // program
+concat
+sha512_256
+retsub
+
+
+// func transfer(asset_id: int, amount: int, sender: bytes, receiver: bytes, note: bytes):
+__func__transfer:
+store 18 // note
+store 19 // receiver
+store 20 // sender
+store 21 // amount
+store 22 // asset_id
+// if asset_id == ALGO_ID:
+  load 22 // asset_id
+  pushint 0 // ALGO_ID
+  ==
+  bz l9_else
+  // then:
+    // inner_txn:
+    itxn_begin
+      // TypeEnum: Pay
+      pushint 1 // Pay
+      itxn_field TypeEnum
+      // Sender: sender
+      load 20 // sender
+      itxn_field Sender
+      // Receiver: receiver
+      load 19 // receiver
+      itxn_field Receiver
+      // Amount: amount
+      load 21 // amount
+      itxn_field Amount
+      // Fee: 0
+      pushint 0
+      itxn_field Fee
+      // Note: note
+      load 18 // note
+      itxn_field Note
+    itxn_submit
+    // end inner_txn
+  b l9_end
+  l9_else:
+  // else:
+    // inner_txn:
+    itxn_begin
+      // TypeEnum: Axfer
+      pushint 4 // Axfer
+      itxn_field TypeEnum
+      // Sender: sender
+      load 20 // sender
+      itxn_field Sender
+      // AssetReceiver: receiver
+      load 19 // receiver
+      itxn_field AssetReceiver
+      // AssetAmount: amount
+      load 21 // amount
+      itxn_field AssetAmount
+      // XferAsset: asset_id
+      load 22 // asset_id
+      itxn_field XferAsset
+      // Fee: 0
+      pushint 0
+      itxn_field Fee
+      // Note: note
+      load 18 // note
+      itxn_field Note
+    itxn_submit
+    // end inner_txn
+  l9_end: // end
+// return
+retsub
+
+
+// func get_balance(account_idx: int, asset_id: int) int:
+__func__get_balance:
+store 23 // asset_id
+store 24 // account_idx
+// int balance [slot 25]
+// if asset_id == ALGO_ID:
+  load 23 // asset_id
+  pushint 0 // ALGO_ID
+  ==
+  bz l10_else
+  // then:
+    // balance = balance(account_idx) - min_balance(account_idx)
+    load 24 // account_idx
+    balance
+    load 24 // account_idx
+    min_balance
+    -
+    store 25 // balance
+  b l10_end
+  l10_else:
+  // else:
+    // int is_opted_in [slot 26]
+    // is_opted_in, balance = asset_holding_get(AssetBalance, account_idx, asset_id)
+    load 24 // account_idx
+    load 23 // asset_id
+    asset_holding_get AssetBalance
+    store 26 // is_opted_in
+    store 25 // balance
+    // assert(is_opted_in)
+    load 26 // is_opted_in
+    assert
+  l10_end: // end
+// return balance
+load 25 // balance
+retsub
+
+
+// func abi_return(result: bytes):
+__func__abi_return:
+store 27 // result
+// log(concat("\x15\x1f\x7c\x75", result))
+pushbytes "\x15\x1f\x7c\x75"
+load 27 // result
+concat
+log
+// return
+retsub
+
