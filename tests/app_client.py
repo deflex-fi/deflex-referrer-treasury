@@ -146,25 +146,6 @@ class AppClient:
         ), AccountTransactionSigner(user.sk)))
 
 
-    def prepare_test(self,
-            user: KeyPair,
-            app_id: int,
-            composer: Optional[AtomicTransactionComposer] = None,
-            params: Optional[SuggestedParams] = None) -> AtomicTransactionComposer:
-        composer, params = self._get_defaults(composer, params)
-        return composer.add_method_call(
-            app_id=app_id,
-            sender=user.pk,
-            method=self.contract.get_method_by_name('sum'),
-            sp=params,
-            method_args=[
-                1,
-                2,
-            ],
-            signer=AccountTransactionSigner(user.sk),
-        )
-
-
     def prepare_register_escrow(self,
             user: KeyPair,
             app_id: int,
