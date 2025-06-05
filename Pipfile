@@ -1,0 +1,13 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+py-algorand-sdk = ">=2.0.0"
+tealish = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.13"
